@@ -1,0 +1,162 @@
+@startuml jetpass_core_domain
+
+enum Role {
+    pilot
+    atc_authority
+    airport_operator
+    admin
+}
+
+enum AuthorityType {
+    ARO
+    AIS
+    ACC
+    APP
+    TWR
+    EANA
+    ANAC
+}
+
+enum WakeTurbulenceCat {
+    L
+    M
+    H
+    J
+}
+
+enum FlightRules {
+    V
+    I
+    Y
+    Z
+}
+
+enum FlightType {
+    G
+    S
+    N
+    M
+    X
+}
+
+enum FlightPlanStatus {
+    draft
+    filed
+    pending_approval
+    accepted
+    rejected
+    active
+    closed
+    cancelled
+}
+
+class User {
+    + id : UUID
+    + email : String
+    + password_hash : String
+    + first_name : String
+    + last_name : String
+    + phone : String
+    + role: Enum
+    + is_verified : Boolean
+    + is_active : Boolean
+    + created_at : Timestamp
+    + updated_at : Timestamp
+  }
+
+class PilotProfile {
+    + id : UUID
+    + user_id : UUID
+    + license_number : String
+    + license_type : String
+    + license_country : String
+    + license_expiry : Date
+    + signature : String
+    + created_at : Timestamp
+    + updated_at : Timestamp
+}
+
+class AirportOperatorProfile {
+    + id : UUID
+    + user_id : UUID
+    + organization_name : String
+    + aerodrome_icao_code : String
+    + created_at : Timestamp
+    + updated_at : Timestamp
+}
+
+class AuthorityProfile {
+    + id : UUID
+    + user_id : UUID
+    + organization_name : String
+    + authority_type : Enum
+    + aerodrome_icao_code : String
+    + created_at : Timestamp
+    + updated_at : Timestamp
+}
+
+class Aircraft {
+    + id : UUID
+    + owner_user_id : UUID
+    + alias : String
+    + is_active : Boolean
+    + identification : String
+    + icao_type_designator : String
+    + wake_turbulence_category : Enum
+    + equipment_com_nav : String
+    + equipment_surveillance : String
+    + pbn_capabilities : String
+    + emergency_radio : String
+    + survival_equipment : String
+    + life_jackets : String
+    + dinghies_number : Integer
+    + dinghies_capacity : Integer
+    + dinghies_cover : Boolean
+    + dinghies_color : String
+    + color_and_markings : String
+    + created_at : Timestamp
+    + updated_at : Timestamp
+}
+
+class FlightPlan {
+    + id : UUID
+    + pilot_user_id : UUID
+    + aircraft_id : UUID
+    + status : Enum
+    + flight_rules : Enum
+    + flight_type : Enum
+    + departure_aerodrome_icao : String
+    + departure_eobt_utc : Timestamp
+    + cruising_speed : String
+    + cruising_level: String
+    + route : String
+    + destination_aerodrome_icao : String
+    + total_eet : String
+    + alternate1_aerodrome_icao : String
+    + alternate2_aerodrome_icao : String
+    + other_information : String
+    + endurance : String
+    + persons_on_board : Integer
+    + created_at : Timestamp
+    + updated_at : Timestamp
+}
+
+' Composición — el hijo no existe sin el padre
+User "1" *-- "0..1" PilotProfile
+User "1" *-- "0..1" AirportOperatorProfile
+User "1" *-- "0..1" AuthorityProfile
+User "1" *-- "0..*" Aircraft            : owns
+
+' Dependencia — el hijo sobrevive si el padre se elimina
+User "1" --> "0..*" FlightPlan          : files
+Aircraft "1" --> "0..*" FlightPlan      : used in
+
+' Dependencia débil — referencias a enums
+User             ..> Role
+AuthorityProfile ..> AuthorityType
+Aircraft         ..> WakeTurbulenceCat
+FlightPlan       ..> FlightRules
+FlightPlan       ..> FlightType
+FlightPlan       ..> FlightPlanStatus
+
+@enduml
