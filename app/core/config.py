@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     PROD_REDIS_URL: str | None = None
 
     SECRET_KEY: str = Field(default="dev-only-change-me")
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 30
+    JWT_ALGORITHM: str = "HS256"
 
     model_config = SettingsConfigDict(
         env_file=_ENV_FILE,
