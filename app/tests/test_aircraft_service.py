@@ -60,12 +60,23 @@ def test_aircraft_create_payload_defaults_optional_fields_to_none():
     assert payload.equipment_com_nav == "SDFGR"
     assert payload.equipment_surveillance == "B1"
     assert payload.pbn_capabilities is None
-    assert payload.emergency_radio is None
-    assert payload.survival_equipment is None
-    assert payload.life_jackets is None
+    assert payload.emergency_radio_uhf is False
+    assert payload.emergency_radio_vhf is False
+    assert payload.emergency_radio_elt is False
+    assert payload.survival_equipment_present is False
+    assert payload.survival_polar is False
+    assert payload.survival_desert is False
+    assert payload.survival_maritime is False
+    assert payload.survival_jungle is False
+    assert payload.life_jackets_present is False
+    assert payload.life_jackets_lights is False
+    assert payload.life_jackets_fluorescein is False
+    assert payload.life_jackets_uhf is False
+    assert payload.life_jackets_vhf is False
+    assert payload.dinghies_present is False
     assert payload.dinghies_number is None
     assert payload.dinghies_capacity is None
-    assert payload.dinghies_cover is None
+    assert payload.dinghies_cover_present is False
     assert payload.dinghies_color is None
     assert payload.color_and_markings == "White with blue stripes"
 

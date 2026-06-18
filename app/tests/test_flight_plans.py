@@ -1,5 +1,3 @@
-from datetime import datetime, timezone
-
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -63,7 +61,8 @@ def auth_headers(token: str) -> dict:
 def step_one_payload() -> dict:
     return {
         "departure_aerodrome_icao": "sabe",
-        "departure_eobt_utc": "2026-05-18T14:30:00Z",
+        "departure_time_utc": "1430",
+        "flight_date": "2026-05-18",
         "destination_aerodrome_icao": "saez",
         "alternate1_aerodrome_icao": "sadp",
         "alternate2_aerodrome_icao": "sadf",
@@ -80,6 +79,8 @@ async def test_pilot_can_create_list_get_and_patch_draft_flight_plan(client):
     created = create_response.json()
     assert created["status"] == "draft"
     assert created["departure_aerodrome_icao"] == "SABE"
+    assert created["aircraft_number"] == 1
+    assert created["pilot_in_command"] == "Amelia Earhart"
     flight_plan_id = created["id"]
 
     list_response = await client.get("/flight-plans", headers=headers)

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date
 from typing import Any
 from uuid import UUID
 
@@ -8,8 +8,6 @@ from sqlalchemy.orm import selectinload
 
 from app.models.flight_plan import FlightPlan, FlightPlanStatus
 
-_PLAN_OPTIONS = [selectinload(FlightPlan.approvals), selectinload(FlightPlan.status_history), selectinload(FlightPlan.pilot)]
-
 
 class FlightPlanRepository:
     @staticmethod
@@ -17,17 +15,22 @@ class FlightPlanRepository:
         db: AsyncSession,
         *,
         pilot_user_id: UUID,
+        pilot_in_command: str,
         departure_aerodrome_icao: str,
-        departure_eobt_utc: datetime,
+        departure_time_utc: str,
+        flight_date: date,
         destination_aerodrome_icao: str,
         alternate1_aerodrome_icao: str,
         alternate2_aerodrome_icao: str,
     ) -> FlightPlan:
         plan = FlightPlan(
             pilot_user_id=pilot_user_id,
+            pilot_in_command=pilot_in_command,
             status=FlightPlanStatus.DRAFT,
+            aircraft_number=1,
             departure_aerodrome_icao=departure_aerodrome_icao.upper(),
-            departure_eobt_utc=departure_eobt_utc,
+            departure_time_utc=departure_time_utc,
+            flight_date=flight_date,
             destination_aerodrome_icao=destination_aerodrome_icao.upper(),
             alternate1_aerodrome_icao=alternate1_aerodrome_icao.upper(),
             alternate2_aerodrome_icao=alternate2_aerodrome_icao.upper(),
@@ -40,7 +43,7 @@ class FlightPlanRepository:
     async def get_by_id(db: AsyncSession, *, flight_plan_id: UUID) -> FlightPlan | None:
         result = await db.execute(
             select(FlightPlan)
-            .options(*_PLAN_OPTIONS)
+            .options(selectinload(FlightPlan.approvals), selectinload(FlightPlan.status_history))
             .where(FlightPlan.id == flight_plan_id)
         )
         return result.scalar_one_or_none()
@@ -49,7 +52,7 @@ class FlightPlanRepository:
     async def get_by_owner_and_id(db: AsyncSession, *, pilot_user_id: UUID, flight_plan_id: UUID) -> FlightPlan | None:
         result = await db.execute(
             select(FlightPlan)
-            .options(*_PLAN_OPTIONS)
+            .options(selectinload(FlightPlan.approvals), selectinload(FlightPlan.status_history))
             .where(
                 FlightPlan.id == flight_plan_id,
                 FlightPlan.pilot_user_id == pilot_user_id,
@@ -61,7 +64,6 @@ class FlightPlanRepository:
     async def list_by_pilot(db: AsyncSession, *, pilot_user_id: UUID) -> list[FlightPlan]:
         result = await db.execute(
             select(FlightPlan)
-            .options(*_PLAN_OPTIONS)
             .where(FlightPlan.pilot_user_id == pilot_user_id)
             .order_by(FlightPlan.created_at.desc())
         )
@@ -69,18 +71,13 @@ class FlightPlanRepository:
 
     @staticmethod
     async def list_all(db: AsyncSession) -> list[FlightPlan]:
-        result = await db.execute(
-            select(FlightPlan)
-            .options(*_PLAN_OPTIONS)
-            .order_by(FlightPlan.created_at.desc())
-        )
+        result = await db.execute(select(FlightPlan).order_by(FlightPlan.created_at.desc()))
         return list(result.scalars().all())
 
     @staticmethod
     async def list_pending_for_destination(db: AsyncSession, *, destination_aerodrome_icao: str) -> list[FlightPlan]:
         result = await db.execute(
             select(FlightPlan)
-            .options(*_PLAN_OPTIONS)
             .where(
                 FlightPlan.destination_aerodrome_icao == destination_aerodrome_icao.upper(),
                 FlightPlan.status == FlightPlanStatus.PENDING_APPROVAL,
@@ -94,7 +91,6 @@ class FlightPlanRepository:
         code = aerodrome_icao.upper()
         result = await db.execute(
             select(FlightPlan)
-            .options(*_PLAN_OPTIONS)
             .where(
                 FlightPlan.status == FlightPlanStatus.PENDING_APPROVAL,
                 (
@@ -117,7 +113,6 @@ class FlightPlanRepository:
             "alternate2_aerodrome_icao",
             "cruising_speed",
             "cruising_level",
-            "rule_change_point",
             "aircraft_identification_snapshot",
             "aircraft_type_designator_snapshot",
             "equipment_com_nav_snapshot",

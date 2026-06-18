@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -45,13 +45,14 @@ async def create_pilot(db_session, *, email: str = "pilot@example.com"):
 @pytest.mark.asyncio
 async def test_flight_plan_repository_creates_step_one_draft(db_session):
     pilot = await create_pilot(db_session)
-    eobt = datetime(2026, 5, 18, 14, 30, tzinfo=timezone.utc)
 
     plan = await FlightPlanRepository.create_draft(
         db_session,
         pilot_user_id=pilot.id,
+        pilot_in_command="Amelia Earhart",
         departure_aerodrome_icao="sabe",
-        departure_eobt_utc=eobt,
+        departure_time_utc="1430",
+        flight_date=date(2026, 5, 18),
         destination_aerodrome_icao="saez",
         alternate1_aerodrome_icao="sadp",
         alternate2_aerodrome_icao="sadf",
@@ -65,9 +66,10 @@ async def test_flight_plan_repository_creates_step_one_draft(db_session):
     assert fetched.status == FlightPlanStatus.DRAFT
     assert fetched.pilot_user_id == pilot.id
     assert fetched.departure_aerodrome_icao == "SABE"
-    assert fetched.destination_aerodrome_icao == "SAEZ"
-    assert fetched.alternate1_aerodrome_icao == "SADP"
-    assert fetched.alternate2_aerodrome_icao == "SADF"
+    assert fetched.departure_time_utc == "1430"
+    assert fetched.flight_date == date(2026, 5, 18)
+    assert fetched.aircraft_number == 1
+    assert fetched.pilot_in_command == "Amelia Earhart"
 
 
 @pytest.mark.asyncio
@@ -76,8 +78,10 @@ async def test_approval_and_history_repositories_persist_records(db_session):
     plan = await FlightPlanRepository.create_draft(
         db_session,
         pilot_user_id=pilot.id,
+        pilot_in_command="Amelia Earhart",
         departure_aerodrome_icao="SABE",
-        departure_eobt_utc=datetime(2026, 5, 18, 14, 30, tzinfo=timezone.utc),
+        departure_time_utc="1430",
+        flight_date=date(2026, 5, 18),
         destination_aerodrome_icao="SAEZ",
         alternate1_aerodrome_icao="SADP",
         alternate2_aerodrome_icao="SADF",

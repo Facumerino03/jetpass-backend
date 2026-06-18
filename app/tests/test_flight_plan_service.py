@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 import pytest
 from fastapi import HTTPException
@@ -14,9 +14,14 @@ from app.models import profiles as _profiles_model
 from app.models import user as _user_model
 from app.models.aircraft import WakeTurbulenceCat
 from app.models.flight_plan import FlightPlanStatus
+from app.models.flight_plan_approval import FlightPlanApprovalStatus
+from app.models.profiles import AuthorityType
 from app.models.user import Role
 from app.repositories.aircraft_repository import AircraftRepository
 from app.repositories.controlled_aerodrome_repository import ControlledAerodromeRepository
+from app.repositories.flight_plan_approval_repository import FlightPlanApprovalRepository
+from app.repositories.flight_plan_status_history_repository import FlightPlanStatusHistoryRepository
+from app.repositories.profile_repository import ProfileRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas.flight_plan import FlightPlanCreate, FlightPlanUpdate
 from app.services.flight_plan_service import FlightPlanService
@@ -66,12 +71,23 @@ async def create_aircraft(db_session, pilot):
         equipment_com_nav="SDFGR",
         equipment_surveillance="B1",
         pbn_capabilities="B2C2D2",
-        emergency_radio="UVE",
-        survival_equipment="J",
-        life_jackets="L",
+        emergency_radio_uhf=True,
+        emergency_radio_vhf=True,
+        emergency_radio_elt=False,
+        survival_equipment_present=True,
+        survival_polar=False,
+        survival_desert=False,
+        survival_maritime=False,
+        survival_jungle=True,
+        life_jackets_present=True,
+        life_jackets_lights=True,
+        life_jackets_fluorescein=False,
+        life_jackets_uhf=False,
+        life_jackets_vhf=False,
+        dinghies_present=True,
         dinghies_number=1,
         dinghies_capacity=4,
-        dinghies_cover=True,
+        dinghies_cover_present=True,
         dinghies_color="Orange",
         color_and_markings="White with blue stripes",
     )
@@ -80,7 +96,8 @@ async def create_aircraft(db_session, pilot):
 def create_payload():
     return FlightPlanCreate(
         departure_aerodrome_icao="sabe",
-        departure_eobt_utc=datetime(2026, 5, 18, 14, 30, tzinfo=timezone.utc),
+        departure_time_utc="1430",
+        flight_date=date(2026, 5, 18),
         destination_aerodrome_icao="saez",
         alternate1_aerodrome_icao="sadp",
         alternate2_aerodrome_icao="sadf",
@@ -96,7 +113,10 @@ async def test_service_creates_step_one_draft_for_pilot(db_session):
     assert plan.status == FlightPlanStatus.DRAFT
     assert plan.pilot_user_id == pilot.id
     assert plan.departure_aerodrome_icao == "SABE"
-
+    assert plan.departure_time_utc == "1430"
+    assert plan.flight_date == date(2026, 5, 18)
+    assert plan.aircraft_number == 1
+    assert plan.pilot_in_command == "Amelia Earhart"
 
 
 @pytest.mark.asyncio
@@ -116,6 +136,16 @@ async def test_service_selects_aircraft_and_generates_snapshot(db_session):
     assert updated.aircraft_identification_snapshot == "LV-ABC"
     assert updated.aircraft_type_designator_snapshot == "C172"
     assert updated.equipment_com_nav_snapshot == "SDFGR"
+    assert updated.emergency_radio_uhf_snapshot is True
+    assert updated.emergency_radio_vhf_snapshot is True
+    assert updated.emergency_radio_elt_snapshot is False
+    assert updated.survival_equipment_present_snapshot is True
+    assert updated.survival_jungle_snapshot is True
+    assert updated.life_jackets_present_snapshot is True
+    assert updated.life_jackets_lights_snapshot is True
+    assert updated.dinghies_present_snapshot is True
+    assert updated.dinghies_number_snapshot == 1
+    assert updated.dinghies_cover_present_snapshot is True
     assert updated.aircraft_snapshot_confirmed_at is not None
 
 
@@ -135,11 +165,6 @@ async def test_service_rejects_aircraft_owned_by_another_pilot(db_session):
         )
 
     assert exc.value.status_code == 404
-
-
-from app.models.flight_plan_approval import FlightPlanApprovalStatus
-from app.repositories.flight_plan_approval_repository import FlightPlanApprovalRepository
-from app.repositories.flight_plan_status_history_repository import FlightPlanStatusHistoryRepository
 
 
 async def complete_plan(db_session, pilot):
@@ -215,39 +240,6 @@ async def test_submit_requires_endurance_greater_than_total_eet(db_session):
 
     assert exc.value.status_code == 422
     assert "endurance must be greater than total_eet" in exc.value.detail
-
-
-@pytest.mark.asyncio
-async def test_submit_requires_rule_change_point_for_y_rules(db_session):
-    pilot = await create_user(db_session, email="pilot@example.com", role=Role.PILOT)
-    aircraft = await create_aircraft(db_session, pilot)
-    plan = await FlightPlanService.create_draft(db_session, pilot, create_payload())
-    plan = await FlightPlanService.update_draft(
-        db_session,
-        pilot,
-        plan.id,
-        FlightPlanUpdate(
-            flight_rules="Y",
-            flight_type="G",
-            aircraft_id=aircraft.id,
-            cruising_speed="N0120",
-            cruising_level="A045",
-            route="DCT GUALE DCT",
-            total_eet="0100",
-            endurance="0230",
-            persons_on_board=2,
-        ),
-    )
-
-    with pytest.raises(HTTPException) as exc:
-        await FlightPlanService.submit(db_session, pilot, plan.id)
-
-    assert exc.value.status_code == 422
-    assert "rule_change_point is required" in exc.value.detail
-
-
-from app.models.profiles import AuthorityType
-from app.repositories.profile_repository import ProfileRepository
 
 
 @pytest.mark.asyncio

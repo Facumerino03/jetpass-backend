@@ -170,7 +170,8 @@ async def test_create_flight_plan_rejects_aerodrome_outside_controlled_catalog(c
         "/flight-plans",
         json={
             "departure_aerodrome_icao": "SABE",
-            "departure_eobt_utc": "2026-05-18T14:30:00Z",
+            "departure_time_utc": "1430",
+            "flight_date": "2026-05-18",
             "destination_aerodrome_icao": "SAEZ",
             "alternate1_aerodrome_icao": "SADP",
             "alternate2_aerodrome_icao": "SADF",

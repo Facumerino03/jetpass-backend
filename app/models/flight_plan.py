@@ -1,8 +1,8 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from enum import StrEnum
 from uuid import UUID, uuid4
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, Text, Uuid
+from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Integer, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -48,6 +48,7 @@ class FlightPlan(Base):
         index=True,
     )
 
+    aircraft_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     flight_rules: Mapped[FlightRules | None] = mapped_column(
         Enum(FlightRules, values_callable=lambda obj: [item.value for item in obj]),
         nullable=True,
@@ -57,14 +58,14 @@ class FlightPlan(Base):
         nullable=True,
     )
     departure_aerodrome_icao: Mapped[str] = mapped_column(String(4), nullable=False, index=True)
-    departure_eobt_utc: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    departure_time_utc: Mapped[str | None] = mapped_column(String(4), nullable=True)
+    flight_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     destination_aerodrome_icao: Mapped[str] = mapped_column(String(4), nullable=False, index=True)
     alternate1_aerodrome_icao: Mapped[str] = mapped_column(String(4), nullable=False)
     alternate2_aerodrome_icao: Mapped[str] = mapped_column(String(4), nullable=False)
     cruising_speed: Mapped[str | None] = mapped_column(String(5), nullable=True)
     cruising_level: Mapped[str | None] = mapped_column(String(5), nullable=True)
     route: Mapped[str | None] = mapped_column(Text, nullable=True)
-    rule_change_point: Mapped[str | None] = mapped_column(String(40), nullable=True)
     total_eet: Mapped[str | None] = mapped_column(String(4), nullable=True)
     other_information: Mapped[str | None] = mapped_column(Text, nullable=True)
     endurance: Mapped[str | None] = mapped_column(String(4), nullable=True)
@@ -75,15 +76,32 @@ class FlightPlan(Base):
     wake_turbulence_category_snapshot: Mapped[WakeTurbulenceCat | None] = mapped_column(Enum(WakeTurbulenceCat), nullable=True)
     equipment_com_nav_snapshot: Mapped[str | None] = mapped_column(String(80), nullable=True)
     equipment_surveillance_snapshot: Mapped[str | None] = mapped_column(String(80), nullable=True)
-    emergency_radio_snapshot: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    survival_equipment_snapshot: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    life_jackets_snapshot: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    emergency_radio_uhf_snapshot: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    emergency_radio_vhf_snapshot: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    emergency_radio_elt_snapshot: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    survival_equipment_present_snapshot: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    survival_polar_snapshot: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    survival_desert_snapshot: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    survival_maritime_snapshot: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    survival_jungle_snapshot: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    life_jackets_present_snapshot: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    life_jackets_lights_snapshot: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    life_jackets_fluorescein_snapshot: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    life_jackets_uhf_snapshot: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    life_jackets_vhf_snapshot: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    dinghies_present_snapshot: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     dinghies_number_snapshot: Mapped[int | None] = mapped_column(Integer, nullable=True)
     dinghies_capacity_snapshot: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    dinghies_cover_snapshot: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    dinghies_cover_present_snapshot: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     dinghies_color_snapshot: Mapped[str | None] = mapped_column(String(40), nullable=True)
     color_and_markings_snapshot: Mapped[str | None] = mapped_column(String(255), nullable=True)
     aircraft_snapshot_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    remarks_present: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    remarks: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    pilot_in_command: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    signature_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))

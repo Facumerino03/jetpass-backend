@@ -1,6 +1,5 @@
 import re
 
-
 _ICAO_RE = re.compile(r"^[A-Z0-9]{4}$")
 _HHMM_RE = re.compile(r"^\d{4}$")
 

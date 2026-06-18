@@ -31,6 +31,10 @@ class FlightPlanService:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Flight plan can only be edited in draft status")
 
     @staticmethod
+    def _pilot_in_command_name(user: User) -> str:
+        return f"{user.first_name} {user.last_name}"
+
+    @staticmethod
     async def create_draft(db: AsyncSession, current_user: User, payload: FlightPlanCreate) -> FlightPlan:
         FlightPlanService._ensure_pilot(current_user)
 
@@ -45,8 +49,10 @@ class FlightPlanService:
         plan = await FlightPlanRepository.create_draft(
             db,
             pilot_user_id=current_user.id,
+            pilot_in_command=FlightPlanService._pilot_in_command_name(current_user),
             departure_aerodrome_icao=payload.departure_aerodrome_icao,
-            departure_eobt_utc=payload.departure_eobt_utc,
+            departure_time_utc=payload.departure_time_utc,
+            flight_date=payload.flight_date,
             destination_aerodrome_icao=payload.destination_aerodrome_icao,
             alternate1_aerodrome_icao=payload.alternate1_aerodrome_icao,
             alternate2_aerodrome_icao=payload.alternate2_aerodrome_icao,
@@ -56,16 +62,6 @@ class FlightPlanService:
         return plan
 
     @staticmethod
-    async def _ensure_controlled_aerodromes_active(db: AsyncSession, *icao_codes: str) -> None:
-        for icao_code in icao_codes:
-            aerodrome = await ControlledAerodromeRepository.get_by_icao(db, icao_code=icao_code)
-            if aerodrome is None or not aerodrome.is_active:
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail=f"Aerodrome {icao_code.upper()} is not in the active controlled catalog",
-                )
-
-    @staticmethod
     def _snapshot_from_aircraft(aircraft: Aircraft) -> dict:
         return {
             "aircraft_identification_snapshot": aircraft.identification,
@@ -73,12 +69,23 @@ class FlightPlanService:
             "wake_turbulence_category_snapshot": aircraft.wake_turbulence_category,
             "equipment_com_nav_snapshot": aircraft.equipment_com_nav,
             "equipment_surveillance_snapshot": aircraft.equipment_surveillance,
-            "emergency_radio_snapshot": aircraft.emergency_radio,
-            "survival_equipment_snapshot": aircraft.survival_equipment,
-            "life_jackets_snapshot": aircraft.life_jackets,
+            "emergency_radio_uhf_snapshot": aircraft.emergency_radio_uhf,
+            "emergency_radio_vhf_snapshot": aircraft.emergency_radio_vhf,
+            "emergency_radio_elt_snapshot": aircraft.emergency_radio_elt,
+            "survival_equipment_present_snapshot": aircraft.survival_equipment_present,
+            "survival_polar_snapshot": aircraft.survival_polar,
+            "survival_desert_snapshot": aircraft.survival_desert,
+            "survival_maritime_snapshot": aircraft.survival_maritime,
+            "survival_jungle_snapshot": aircraft.survival_jungle,
+            "life_jackets_present_snapshot": aircraft.life_jackets_present,
+            "life_jackets_lights_snapshot": aircraft.life_jackets_lights,
+            "life_jackets_fluorescein_snapshot": aircraft.life_jackets_fluorescein,
+            "life_jackets_uhf_snapshot": aircraft.life_jackets_uhf,
+            "life_jackets_vhf_snapshot": aircraft.life_jackets_vhf,
+            "dinghies_present_snapshot": aircraft.dinghies_present,
             "dinghies_number_snapshot": aircraft.dinghies_number,
             "dinghies_capacity_snapshot": aircraft.dinghies_capacity,
-            "dinghies_cover_snapshot": aircraft.dinghies_cover,
+            "dinghies_cover_present_snapshot": aircraft.dinghies_cover_present,
             "dinghies_color_snapshot": aircraft.dinghies_color,
             "color_and_markings_snapshot": aircraft.color_and_markings,
             "aircraft_snapshot_confirmed_at": datetime.now(timezone.utc),
@@ -144,9 +151,11 @@ class FlightPlanService:
         try:
             if hhmm_to_minutes(plan.endurance) <= hhmm_to_minutes(plan.total_eet):
                 raise ValueError("endurance must be greater than total_eet")
-            ensure_rule_change_point_valid(str(plan.flight_rules.value), plan.route, plan.rule_change_point)
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+        if plan.flight_rules in {FlightRules.Y, FlightRules.Z} and not plan.route:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="route is required for Y/Z flight rules")
 
     @staticmethod
     async def _transition(
@@ -204,17 +213,6 @@ class FlightPlanService:
         return plan
 
     @staticmethod
-    def _filter_authority_already_decided(plans: list[FlightPlan]) -> list[FlightPlan]:
-        return [
-            plan for plan in plans
-            if any(
-                approval.actor == FlightPlanApprovalActor.AUTHORITY
-                and approval.status == FlightPlanApprovalStatus.PENDING
-                for approval in plan.approvals
-            )
-        ]
-
-    @staticmethod
     async def list_visible(db: AsyncSession, current_user: User) -> list[FlightPlan]:
         if current_user.role == Role.ADMIN:
             return await FlightPlanRepository.list_all(db)
@@ -233,15 +231,13 @@ class FlightPlanService:
             if profile is None:
                 return []
             if profile.authority_type in {AuthorityType.ANAC, AuthorityType.EANA}:
-                candidates = [plan for plan in await FlightPlanRepository.list_all(db) if plan.status == FlightPlanStatus.PENDING_APPROVAL]
-                return FlightPlanService._filter_authority_already_decided(candidates)
+                return [plan for plan in await FlightPlanRepository.list_all(db) if plan.status == FlightPlanStatus.PENDING_APPROVAL]
             if profile.aerodrome_icao_code is None:
                 return []
-            candidates = await FlightPlanRepository.list_pending_for_relevant_aerodrome(
+            return await FlightPlanRepository.list_pending_for_relevant_aerodrome(
                 db,
                 aerodrome_icao=profile.aerodrome_icao_code,
             )
-            return FlightPlanService._filter_authority_already_decided(candidates)
         return []
 
     @staticmethod
@@ -327,3 +323,13 @@ class FlightPlanService:
         await db.commit()
         await db.refresh(plan)
         return plan
+
+    @staticmethod
+    async def _ensure_controlled_aerodromes_active(db: AsyncSession, *icao_codes: str) -> None:
+        for icao_code in icao_codes:
+            aerodrome = await ControlledAerodromeRepository.get_by_icao(db, icao_code=icao_code)
+            if aerodrome is None or not aerodrome.is_active:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"Aerodrome {icao_code.upper()} is not in the active controlled catalog",
+                )

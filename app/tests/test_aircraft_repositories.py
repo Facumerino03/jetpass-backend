@@ -46,12 +46,23 @@ async def test_aircraft_repository_creates_and_fetches_active_aircraft_by_owner(
         equipment_com_nav="SDFGR",
         equipment_surveillance="B1",
         pbn_capabilities="B2C2D2",
-        emergency_radio="UVE",
-        survival_equipment="J",
-        life_jackets="L",
+        emergency_radio_uhf=True,
+        emergency_radio_vhf=True,
+        emergency_radio_elt=False,
+        survival_equipment_present=True,
+        survival_polar=False,
+        survival_desert=False,
+        survival_maritime=False,
+        survival_jungle=True,
+        life_jackets_present=True,
+        life_jackets_lights=True,
+        life_jackets_fluorescein=False,
+        life_jackets_uhf=False,
+        life_jackets_vhf=False,
+        dinghies_present=True,
         dinghies_number=1,
         dinghies_capacity=4,
-        dinghies_cover=True,
+        dinghies_cover_present=True,
         dinghies_color="Orange",
         color_and_markings="White with blue stripes",
     )
@@ -75,6 +86,11 @@ async def test_aircraft_repository_creates_and_fetches_active_aircraft_by_owner(
     assert fetched.wake_turbulence_category == WakeTurbulenceCat.L
     assert fetched.is_active is True
     assert fetched.image_url is None
+    assert fetched.emergency_radio_uhf is True
+    assert fetched.emergency_radio_elt is False
+    assert fetched.survival_equipment_present is True
+    assert fetched.dinghies_present is True
+    assert fetched.dinghies_cover_present is True
     assert [item.id for item in active_aircraft] == [aircraft.id]
 
 
@@ -91,13 +107,6 @@ async def test_aircraft_repository_persists_image_url(db_session):
         equipment_com_nav="S",
         equipment_surveillance="C",
         pbn_capabilities=None,
-        emergency_radio=None,
-        survival_equipment=None,
-        life_jackets=None,
-        dinghies_number=None,
-        dinghies_capacity=None,
-        dinghies_cover=None,
-        dinghies_color=None,
         color_and_markings="Red",
         image_url="https://bucket.example.com/aircraft/lv-img.jpg",
     )
@@ -126,13 +135,6 @@ async def test_aircraft_repository_excludes_soft_deleted_aircraft(db_session):
         equipment_com_nav="S",
         equipment_surveillance="C",
         pbn_capabilities=None,
-        emergency_radio=None,
-        survival_equipment=None,
-        life_jackets=None,
-        dinghies_number=None,
-        dinghies_capacity=None,
-        dinghies_cover=None,
-        dinghies_color=None,
         color_and_markings="White",
     )
     await AircraftRepository.soft_delete(aircraft)

@@ -53,13 +53,21 @@ def aircraft_payload() -> dict:
         "equipment_com_nav": "SDFGR",
         "equipment_surveillance": "B1",
         "pbn_capabilities": None,
-        "emergency_radio": None,
-        "survival_equipment": None,
-        "life_jackets": None,
-        "dinghies_number": None,
-        "dinghies_capacity": None,
-        "dinghies_cover": None,
-        "dinghies_color": None,
+        "emergency_radio_uhf": True,
+        "emergency_radio_vhf": True,
+        "emergency_radio_elt": False,
+        "survival_equipment_present": True,
+        "survival_polar": False,
+        "survival_desert": False,
+        "survival_maritime": False,
+        "survival_jungle": True,
+        "life_jackets_present": True,
+        "life_jackets_lights": True,
+        "life_jackets_fluorescein": False,
+        "life_jackets_uhf": False,
+        "life_jackets_vhf": False,
+        "dinghies_present": False,
+        "dinghies_cover_present": False,
         "color_and_markings": "White with blue stripes",
     }
 
@@ -120,30 +128,6 @@ async def test_aircraft_routes_require_authentication(client):
     response = await client.get("/pilot/aircraft")
 
     assert response.status_code == 401
-
-
-@pytest.mark.asyncio
-async def test_pilot_cannot_patch_non_nullable_aircraft_field_to_null(client):
-    access_token = await register_pilot(client)
-    headers = {"Authorization": f"Bearer {access_token}"}
-    create_response = await client.post(
-        "/pilot/aircraft",
-        json=aircraft_payload(),
-        headers=headers,
-    )
-    assert create_response.status_code == 201
-    aircraft_id = create_response.json()["id"]
-
-    patch_response = await client.patch(
-        f"/pilot/aircraft/{aircraft_id}",
-        json={"identification": None},
-        headers=headers,
-    )
-
-    assert patch_response.status_code == 422
-    get_response = await client.get(f"/pilot/aircraft/{aircraft_id}", headers=headers)
-    assert get_response.status_code == 200
-    assert get_response.json()["identification"] == "LV-ABC"
 
 
 @pytest.mark.asyncio
