@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
     JWT_ALGORITHM: str = "HS256"
 
+    INTELLIGENCE_BASE_URL: str | None = None
+    INTELLIGENCE_TIMEOUT_SECONDS: float = 5.0
+
     model_config = SettingsConfigDict(
         env_file=_ENV_FILE,
         env_file_encoding="utf-8",

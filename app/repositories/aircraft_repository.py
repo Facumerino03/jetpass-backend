@@ -27,6 +27,7 @@ class AircraftRepository:
         dinghies_cover: bool | None,
         dinghies_color: str | None,
         color_and_markings: str,
+        image_url: str | None = None,
     ) -> Aircraft:
         aircraft = Aircraft(
             owner_user_id=owner_user_id,
@@ -45,6 +46,7 @@ class AircraftRepository:
             dinghies_cover=dinghies_cover,
             dinghies_color=dinghies_color,
             color_and_markings=color_and_markings,
+            image_url=image_url,
             is_active=True,
         )
         db.add(aircraft)

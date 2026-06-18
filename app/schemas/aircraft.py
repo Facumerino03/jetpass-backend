@@ -22,6 +22,7 @@ class AircraftCreate(BaseModel):
     dinghies_capacity: int | None = Field(default=None, ge=0)
     dinghies_cover: bool | None = None
     dinghies_color: str | None = Field(default=None, max_length=40)
+    image_url: str | None = Field(default=None, max_length=512)
 
 
 class AircraftUpdate(BaseModel):
@@ -40,6 +41,7 @@ class AircraftUpdate(BaseModel):
     dinghies_capacity: int | None = Field(default=None, ge=0)
     dinghies_cover: bool | None = None
     dinghies_color: str | None = Field(default=None, max_length=40)
+    image_url: str | None = Field(default=None, max_length=512)
 
 
 class AircraftPublic(BaseModel):
@@ -63,6 +65,7 @@ class AircraftPublic(BaseModel):
     dinghies_cover: bool | None
     dinghies_color: str | None
     color_and_markings: str
+    image_url: str | None
     created_at: datetime
     updated_at: datetime
 

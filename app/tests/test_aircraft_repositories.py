@@ -74,7 +74,43 @@ async def test_aircraft_repository_creates_and_fetches_active_aircraft_by_owner(
     assert fetched.icao_type_designator == "C172"
     assert fetched.wake_turbulence_category == WakeTurbulenceCat.L
     assert fetched.is_active is True
+    assert fetched.image_url is None
     assert [item.id for item in active_aircraft] == [aircraft.id]
+
+
+@pytest.mark.asyncio
+async def test_aircraft_repository_persists_image_url(db_session):
+    pilot = await create_pilot(db_session)
+    aircraft = await AircraftRepository.create(
+        db_session,
+        owner_user_id=pilot.id,
+        alias="Image Test",
+        identification="LV-IMG",
+        icao_type_designator="C172",
+        wake_turbulence_category=WakeTurbulenceCat.L,
+        equipment_com_nav="S",
+        equipment_surveillance="C",
+        pbn_capabilities=None,
+        emergency_radio=None,
+        survival_equipment=None,
+        life_jackets=None,
+        dinghies_number=None,
+        dinghies_capacity=None,
+        dinghies_cover=None,
+        dinghies_color=None,
+        color_and_markings="Red",
+        image_url="https://bucket.example.com/aircraft/lv-img.jpg",
+    )
+    await db_session.commit()
+
+    fetched = await AircraftRepository.get_active_by_owner_and_id(
+        db_session,
+        owner_user_id=pilot.id,
+        aircraft_id=aircraft.id,
+    )
+
+    assert fetched is not None
+    assert fetched.image_url == "https://bucket.example.com/aircraft/lv-img.jpg"
 
 
 @pytest.mark.asyncio

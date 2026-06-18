@@ -44,6 +44,7 @@ class Aircraft(Base):
     dinghies_cover: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     dinghies_color: Mapped[str | None] = mapped_column(String(40), nullable=True)
     color_and_markings: Mapped[str] = mapped_column(String(255), nullable=False)
+    image_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -57,3 +58,4 @@ class Aircraft(Base):
     )
 
     owner = relationship("User", back_populates="aircraft")
+    flight_plans = relationship("FlightPlan", back_populates="aircraft")

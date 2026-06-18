@@ -52,3 +52,26 @@ class User(Base):
         back_populates="owner",
         cascade="all, delete-orphan",
     )
+    pilot_profile = relationship(
+        "PilotProfile",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+    authority_profile = relationship(
+        "AuthorityProfile",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+    airport_operator_profile = relationship(
+        "AirportOperatorProfile",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+    flight_plans = relationship(
+        "FlightPlan",
+        back_populates="pilot",
+        cascade="all, delete-orphan",
+    )
