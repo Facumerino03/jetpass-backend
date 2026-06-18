@@ -6,10 +6,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.aircraft import Aircraft
 from app.models.user import Role, User
 from app.repositories.aircraft_repository import AircraftRepository
-from app.schemas.aircraft import AircraftCreate, AircraftUpdate
+from app.schemas.aircraft import AircraftCreate, AircraftPublic, AircraftUpdate
+from app.services.aircraft_image_service import AircraftImageService
 
 
 class AircraftService:
+    def __init__(self, *, image_service: AircraftImageService | None = None) -> None:
+        self._image_service = image_service or AircraftImageService()
+
     @staticmethod
     def _ensure_pilot(current_user: User) -> None:
         if current_user.role != Role.PILOT:
@@ -18,18 +22,36 @@ class AircraftService:
                 detail="Only pilots can manage aircraft",
             )
 
-    @staticmethod
+    def to_public(self, aircraft: Aircraft) -> AircraftPublic:
+        return AircraftPublic.from_model(aircraft, image_service=self._image_service)
+
     async def create_for_pilot(
+        self,
         db: AsyncSession,
         current_user: User,
         payload: AircraftCreate,
     ) -> Aircraft:
-        AircraftService._ensure_pilot(current_user)
+        self._ensure_pilot(current_user)
+        create_data = payload.model_dump(exclude={"image_key"})
+        pending_image_key: str | None = None
+        if payload.image_key is not None:
+            pending_image_key = self._image_service.validate_image_key_for_create(
+                current_user=current_user,
+                image_key=payload.image_key,
+            )
+
         aircraft = await AircraftRepository.create(
             db,
             owner_user_id=current_user.id,
-            **payload.model_dump(),
+            **create_data,
         )
+        if pending_image_key is not None:
+            final_image_key = self._image_service.finalize_pending_image(
+                pending_key=pending_image_key,
+                aircraft_id=aircraft.id,
+            )
+            await AircraftRepository.update(aircraft, image_url=final_image_key)
+
         await db.commit()
         await db.refresh(aircraft)
         return aircraft
@@ -52,14 +74,14 @@ class AircraftService:
             aircraft_id=aircraft_id,
         )
 
-    @staticmethod
     async def update_for_pilot(
+        self,
         db: AsyncSession,
         current_user: User,
         aircraft_id: UUID,
         payload: AircraftUpdate,
     ) -> Aircraft:
-        AircraftService._ensure_pilot(current_user)
+        self._ensure_pilot(current_user)
         aircraft = await AircraftRepository.get_active_by_owner_and_id(
             db,
             owner_user_id=current_user.id,
@@ -68,18 +90,27 @@ class AircraftService:
         if aircraft is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Aircraft not found")
 
-        await AircraftRepository.update(aircraft, **payload.model_dump(exclude_unset=True))
+        update_data = payload.model_dump(exclude_unset=True, exclude={"image_key"})
+        if payload.image_key is not None:
+            validated_key = self._image_service.validate_image_key_for_update(
+                aircraft=aircraft,
+                image_key=payload.image_key,
+            )
+            self._image_service.delete_managed_image_if_present(stored_value=aircraft.image_url)
+            update_data["image_url"] = validated_key
+
+        await AircraftRepository.update(aircraft, **update_data)
         await db.commit()
         await db.refresh(aircraft)
         return aircraft
 
-    @staticmethod
     async def delete_for_pilot(
+        self,
         db: AsyncSession,
         current_user: User,
         aircraft_id: UUID,
     ) -> bool:
-        AircraftService._ensure_pilot(current_user)
+        self._ensure_pilot(current_user)
         aircraft = await AircraftRepository.get_active_by_owner_and_id(
             db,
             owner_user_id=current_user.id,
@@ -88,6 +119,29 @@ class AircraftService:
         if aircraft is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Aircraft not found")
 
+        self._image_service.delete_managed_image_if_present(stored_value=aircraft.image_url)
         await AircraftRepository.soft_delete(aircraft)
         await db.commit()
         return True
+
+    async def presign_image_for_create(self, *, current_user: User, content_type: str) -> dict[str, str | int]:
+        self._ensure_pilot(current_user)
+        return self._image_service.presign_for_create(current_user=current_user, content_type=content_type)
+
+    async def presign_image_for_aircraft(
+        self,
+        db: AsyncSession,
+        *,
+        current_user: User,
+        aircraft_id: UUID,
+        content_type: str,
+    ) -> dict[str, str | int]:
+        self._ensure_pilot(current_user)
+        aircraft = await AircraftRepository.get_active_by_owner_and_id(
+            db,
+            owner_user_id=current_user.id,
+            aircraft_id=aircraft_id,
+        )
+        if aircraft is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Aircraft not found")
+        return self._image_service.presign_for_aircraft(aircraft=aircraft, content_type=content_type)

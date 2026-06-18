@@ -1,9 +1,21 @@
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.aircraft import WakeTurbulenceCat
+from app.models.aircraft import Aircraft, WakeTurbulenceCat
+from app.services.aircraft_image_service import AircraftImageService
+
+
+class AircraftImagePresignRequest(BaseModel):
+    content_type: Literal["image/jpeg", "image/png", "image/webp"]
+
+
+class AircraftImagePresignResponse(BaseModel):
+    upload_url: str
+    image_key: str
+    expires_in: int
 
 
 class AircraftCreate(BaseModel):
@@ -33,7 +45,7 @@ class AircraftCreate(BaseModel):
     dinghies_capacity: int | None = Field(default=None, ge=0)
     dinghies_cover_present: bool = False
     dinghies_color: str | None = Field(default=None, max_length=40)
-    image_url: str | None = Field(default=None, max_length=512)
+    image_key: str | None = Field(default=None, max_length=512)
 
 
 class AircraftUpdate(BaseModel):
@@ -63,7 +75,7 @@ class AircraftUpdate(BaseModel):
     dinghies_capacity: int | None = Field(default=None, ge=0)
     dinghies_cover_present: bool | None = None
     dinghies_color: str | None = Field(default=None, max_length=40)
-    image_url: str | None = Field(default=None, max_length=512)
+    image_key: str | None = Field(default=None, max_length=512)
 
 
 class AircraftPublic(BaseModel):
@@ -101,6 +113,22 @@ class AircraftPublic(BaseModel):
     image_url: str | None
     created_at: datetime
     updated_at: datetime
+
+    @classmethod
+    def from_model(
+        cls,
+        aircraft: Aircraft,
+        *,
+        image_service: AircraftImageService | None = None,
+    ) -> "AircraftPublic":
+        service = image_service or AircraftImageService()
+        payload = {
+            field_name: getattr(aircraft, field_name)
+            for field_name in cls.model_fields
+            if field_name != "image_url"
+        }
+        payload["image_url"] = service.resolve_public_image_url(stored_value=aircraft.image_url)
+        return cls.model_validate(payload)
 
 
 class AircraftDeleteResponse(BaseModel):

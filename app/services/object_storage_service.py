@@ -23,25 +23,44 @@ class ObjectStorageService:
     ) -> None:
         self._settings = app_settings or default_settings
         self._s3_client = s3_client
+        self._presign_client: BaseClient | None = None
 
     def is_configured(self) -> bool:
         return self._settings.s3_configured
 
-    def _get_client(self) -> BaseClient:
-        if self._s3_client is not None:
-            return self._s3_client
-
+    @staticmethod
+    def _build_client(*, settings: Settings, endpoint_url: str | None) -> BaseClient:
         return boto3.client(
             "s3",
-            endpoint_url=self._settings.S3_ENDPOINT_URL,
-            aws_access_key_id=self._settings.S3_ACCESS_KEY_ID,
-            aws_secret_access_key=self._settings.S3_SECRET_ACCESS_KEY,
-            region_name=self._settings.S3_REGION,
+            endpoint_url=endpoint_url,
+            aws_access_key_id=settings.S3_ACCESS_KEY_ID,
+            aws_secret_access_key=settings.S3_SECRET_ACCESS_KEY,
+            region_name=settings.S3_REGION,
             config=Config(
                 signature_version="s3v4",
                 s3={"addressing_style": "path"},
             ),
         )
+
+    def _get_client(self) -> BaseClient:
+        if self._s3_client is not None:
+            return self._s3_client
+
+        return self._build_client(
+            settings=self._settings,
+            endpoint_url=self._settings.S3_ENDPOINT_URL,
+        )
+
+    def _get_presign_client(self) -> BaseClient:
+        if self._s3_client is not None and self._settings.S3_PUBLIC_ENDPOINT_URL is None:
+            return self._s3_client
+
+        if self._presign_client is None:
+            self._presign_client = self._build_client(
+                settings=self._settings,
+                endpoint_url=self._settings.s3_public_endpoint_url,
+            )
+        return self._presign_client
 
     def _ensure_configured(self) -> None:
         if not self.is_configured():
@@ -83,7 +102,7 @@ class ObjectStorageService:
         expires_in: int = 3600,
     ) -> str:
         self._ensure_configured()
-        client = self._get_client()
+        client = self._get_presign_client()
         return client.generate_presigned_url(
             ClientMethod="put_object",
             Params={
@@ -96,7 +115,7 @@ class ObjectStorageService:
 
     def generate_presigned_get_url(self, *, key: str, expires_in: int = 3600) -> str:
         self._ensure_configured()
-        client = self._get_client()
+        client = self._get_presign_client()
         return client.generate_presigned_url(
             ClientMethod="get_object",
             Params={
@@ -105,3 +124,15 @@ class ObjectStorageService:
             },
             ExpiresIn=expires_in,
         )
+
+    def move_object(self, *, source_key: str, dest_key: str) -> str:
+        self._ensure_configured()
+        client = self._get_client()
+        bucket = self._settings.S3_BUCKET_NAME
+        client.copy_object(
+            Bucket=bucket,
+            Key=dest_key,
+            CopySource={"Bucket": bucket, "Key": source_key},
+        )
+        client.delete_object(Bucket=bucket, Key=source_key)
+        return dest_key

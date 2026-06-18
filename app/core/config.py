@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     INTELLIGENCE_TIMEOUT_SECONDS: float = 5.0
 
     S3_ENDPOINT_URL: str | None = None
+    S3_PUBLIC_ENDPOINT_URL: str | None = None
     S3_ACCESS_KEY_ID: str | None = None
     S3_SECRET_ACCESS_KEY: str | None = None
     S3_BUCKET_NAME: str = "jetpass"
@@ -57,6 +58,10 @@ class Settings(BaseSettings):
     @property
     def s3_configured(self) -> bool:
         return bool(self.S3_ENDPOINT_URL and self.S3_ACCESS_KEY_ID and self.S3_SECRET_ACCESS_KEY)
+
+    @property
+    def s3_public_endpoint_url(self) -> str | None:
+        return self.S3_PUBLIC_ENDPOINT_URL or self.S3_ENDPOINT_URL
 
 
 settings = Settings()
