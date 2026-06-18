@@ -19,13 +19,30 @@ from app.schemas.controlled_aerodrome import (
     ControlledAerodromePublic,
     ControlledAerodromeUpdate,
 )
-from app.schemas.flight_plan import FlightPlanCreate, FlightPlanDecisionRequest, FlightPlanDetailPublic, FlightPlanPublic, FlightPlanSubmitResponse, FlightPlanUpdate
+from app.schemas.flight_plan import (
+    FlightPlanCreate,
+    FlightPlanDecisionRequest,
+    FlightPlanDetailPublic,
+    FlightPlanPublic,
+    FlightPlanSignaturePresignRequest,
+    FlightPlanSignaturePresignResponse,
+    FlightPlanSubmitResponse,
+    FlightPlanUpdate,
+)
 from app.schemas.intelligence import IntelligenceAerodromeRequest, IntelligenceRunRequest, IntelligenceRunResponse
 from app.services.flight_plan_service import FlightPlanService
+from app.services.flight_plan_signature_service import FlightPlanSignatureService
 from app.services.intelligence_client import IntelligenceClient
 from app.core.config import settings
 
 router = APIRouter(prefix="/flight-plans", tags=["flight-plans"])
+
+
+def get_flight_plan_signature_service() -> FlightPlanSignatureService:
+    return FlightPlanService._get_signature_service()
+
+
+FlightPlanSignatureServiceDep = Annotated[FlightPlanSignatureService, Depends(get_flight_plan_signature_service)]
 
 
 async def _enrich_coordinates(db: AsyncSession, icao_codes: list[str]) -> None:
@@ -216,19 +233,21 @@ async def create_flight_plan(
     payload: FlightPlanCreate,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: CurrentActiveUserDep,
+    signature_service: FlightPlanSignatureServiceDep,
 ) -> FlightPlanPublic:
     plan = await FlightPlanService.create_draft(db, current_user, payload)
     plan = await FlightPlanRepository.get_by_id(db, flight_plan_id=plan.id)
-    return FlightPlanPublic.model_validate(plan)
+    return FlightPlanPublic.from_model(plan, signature_service=signature_service)
 
 
 @router.get("")
 async def list_flight_plans(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: CurrentActiveUserDep,
+    signature_service: FlightPlanSignatureServiceDep,
 ) -> list[FlightPlanPublic]:
     plans = await FlightPlanService.list_visible(db, current_user)
-    return [FlightPlanPublic.model_validate(plan) for plan in plans]
+    return [FlightPlanPublic.from_model(plan, signature_service=signature_service) for plan in plans]
 
 
 @router.get("/{flight_plan_id}")
@@ -236,9 +255,26 @@ async def get_flight_plan(
     flight_plan_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: CurrentActiveUserDep,
+    signature_service: FlightPlanSignatureServiceDep,
 ) -> FlightPlanDetailPublic:
     plan = await FlightPlanService.get_visible(db, current_user, flight_plan_id)
-    return FlightPlanDetailPublic.model_validate(plan)
+    return FlightPlanDetailPublic.from_model(plan, signature_service=signature_service)
+
+
+@router.post("/{flight_plan_id}/signature/presign")
+async def presign_flight_plan_signature(
+    flight_plan_id: UUID,
+    payload: FlightPlanSignaturePresignRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: CurrentActiveUserDep,
+) -> FlightPlanSignaturePresignResponse:
+    result = await FlightPlanService.presign_signature(
+        db,
+        current_user,
+        flight_plan_id,
+        payload.content_type,
+    )
+    return FlightPlanSignaturePresignResponse.model_validate(result)
 
 
 @router.patch("/{flight_plan_id}")
@@ -247,10 +283,11 @@ async def update_flight_plan(
     payload: FlightPlanUpdate,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: CurrentActiveUserDep,
+    signature_service: FlightPlanSignatureServiceDep,
 ) -> FlightPlanPublic:
     plan = await FlightPlanService.update_draft(db, current_user, flight_plan_id, payload)
     plan = await FlightPlanRepository.get_by_id(db, flight_plan_id=plan.id)
-    return FlightPlanPublic.model_validate(plan)
+    return FlightPlanPublic.from_model(plan, signature_service=signature_service)
 
 
 @router.post("/{flight_plan_id}/submit")

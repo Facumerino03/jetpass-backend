@@ -21,6 +21,7 @@ from app.repositories.aircraft_repository import AircraftRepository
 from app.repositories.controlled_aerodrome_repository import ControlledAerodromeRepository
 from app.repositories.flight_plan_approval_repository import FlightPlanApprovalRepository
 from app.repositories.flight_plan_status_history_repository import FlightPlanStatusHistoryRepository
+from app.repositories.flight_plan_repository import FlightPlanRepository
 from app.repositories.profile_repository import ProfileRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas.flight_plan import FlightPlanCreate, FlightPlanUpdate
@@ -170,7 +171,7 @@ async def test_service_rejects_aircraft_owned_by_another_pilot(db_session):
 async def complete_plan(db_session, pilot):
     aircraft = await create_aircraft(db_session, pilot)
     plan = await FlightPlanService.create_draft(db_session, pilot, create_payload())
-    return await FlightPlanService.update_draft(
+    plan = await FlightPlanService.update_draft(
         db_session,
         pilot,
         plan.id,
@@ -187,6 +188,13 @@ async def complete_plan(db_session, pilot):
             other_information="RMK/TRAINING",
         ),
     )
+    await FlightPlanRepository.update(
+        plan,
+        signature_url=f"flight-plans/{plan.id}/test-signature.png",
+    )
+    await db_session.commit()
+    await db_session.refresh(plan)
+    return plan
 
 
 @pytest.mark.asyncio
@@ -234,6 +242,12 @@ async def test_submit_requires_endurance_greater_than_total_eet(db_session):
             persons_on_board=2,
         ),
     )
+    await FlightPlanRepository.update(
+        plan,
+        signature_url=f"flight-plans/{plan.id}/test-signature.png",
+    )
+    await db_session.commit()
+    await db_session.refresh(plan)
 
     with pytest.raises(HTTPException) as exc:
         await FlightPlanService.submit(db_session, pilot, plan.id)

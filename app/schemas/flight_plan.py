@@ -1,12 +1,24 @@
 from datetime import date, datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.aircraft import WakeTurbulenceCat
-from app.models.flight_plan import FlightPlanStatus, FlightRules, FlightType
+from app.models.flight_plan import FlightPlan, FlightPlanStatus, FlightRules, FlightType
 from app.models.flight_plan_approval import FlightPlanApprovalActor, FlightPlanApprovalStatus
+from app.services.flight_plan_signature_service import FlightPlanSignatureService
 from app.services.flight_plan_validations import ensure_valid_icao_code
+
+
+class FlightPlanSignaturePresignRequest(BaseModel):
+    content_type: Literal["image/png"]
+
+
+class FlightPlanSignaturePresignResponse(BaseModel):
+    upload_url: str
+    signature_key: str
+    expires_in: int
 
 
 class FlightPlanCreate(BaseModel):
@@ -60,6 +72,7 @@ class FlightPlanUpdate(BaseModel):
     persons_on_board: int | None = Field(default=None, ge=1)
     remarks_present: bool | None = None
     remarks: str | None = None
+    signature_key: str | None = Field(default=None, max_length=512)
 
 
 class FlightPlanSubmitResponse(BaseModel):
@@ -150,7 +163,33 @@ class FlightPlanPublic(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+    @classmethod
+    def from_model(
+        cls,
+        plan: FlightPlan,
+        *,
+        signature_service: FlightPlanSignatureService | None = None,
+    ) -> "FlightPlanPublic":
+        service = signature_service or FlightPlanSignatureService()
+        payload = cls.model_validate(plan).model_dump()
+        payload["signature_url"] = service.resolve_public_signature_url(stored_value=plan.signature_url)
+        return cls.model_validate(payload)
+
 
 class FlightPlanDetailPublic(FlightPlanPublic):
     approvals: list[FlightPlanApprovalPublic] = Field(default_factory=list)
     status_history: list[FlightPlanStatusHistoryPublic] = Field(default_factory=list)
+
+    @classmethod
+    def from_model(
+        cls,
+        plan: FlightPlan,
+        *,
+        signature_service: FlightPlanSignatureService | None = None,
+    ) -> "FlightPlanDetailPublic":
+        base = FlightPlanPublic.from_model(plan, signature_service=signature_service)
+        return cls(
+            **base.model_dump(),
+            approvals=[FlightPlanApprovalPublic.model_validate(item) for item in plan.approvals],
+            status_history=[FlightPlanStatusHistoryPublic.model_validate(item) for item in plan.status_history],
+        )

@@ -16,10 +16,18 @@ from app.repositories.flight_plan_repository import FlightPlanRepository
 from app.repositories.flight_plan_status_history_repository import FlightPlanStatusHistoryRepository
 from app.repositories.profile_repository import ProfileRepository
 from app.schemas.flight_plan import FlightPlanCreate, FlightPlanUpdate
+from app.services.flight_plan_signature_service import FlightPlanSignatureService
 from app.services.flight_plan_validations import ensure_rule_change_point_valid, hhmm_to_minutes
 
 
 class FlightPlanService:
+    _signature_service: FlightPlanSignatureService | None = None
+
+    @classmethod
+    def _get_signature_service(cls) -> FlightPlanSignatureService:
+        if cls._signature_service is None:
+            cls._signature_service = FlightPlanSignatureService()
+        return cls._signature_service
     @staticmethod
     def _ensure_pilot(current_user: User) -> None:
         if current_user.role != Role.PILOT:
@@ -104,7 +112,16 @@ class FlightPlanService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Flight plan not found")
         FlightPlanService._ensure_draft(plan)
 
-        fields = payload.model_dump(exclude_unset=True)
+        fields = payload.model_dump(exclude_unset=True, exclude={"signature_key"})
+        if "signature_key" in payload.model_fields_set and payload.signature_key is not None:
+            signature_service = FlightPlanService._get_signature_service()
+            validated_key = signature_service.validate_signature_key_for_plan(
+                plan=plan,
+                signature_key=payload.signature_key,
+            )
+            signature_service.delete_managed_signature_if_present(stored_value=plan.signature_url)
+            fields["signature_url"] = validated_key
+
         aircraft_id = fields.pop("aircraft_id", None)
         if aircraft_id is not None:
             aircraft = await AircraftRepository.get_active_by_owner_and_id(db, owner_user_id=current_user.id, aircraft_id=aircraft_id)
@@ -138,6 +155,7 @@ class FlightPlanService:
             "total_eet",
             "endurance",
             "persons_on_board",
+            "signature_url",
         ]
         for field in required_fields:
             if getattr(plan, field) in {None, ""}:
@@ -176,6 +194,24 @@ class FlightPlanService:
             updated_by_user_id=updated_by_user_id,
             reason=reason,
         )
+
+    @staticmethod
+    async def presign_signature(
+        db: AsyncSession,
+        current_user: User,
+        flight_plan_id: UUID,
+        content_type: str,
+    ) -> dict[str, str | int]:
+        FlightPlanService._ensure_pilot(current_user)
+        plan = await FlightPlanRepository.get_by_owner_and_id(
+            db,
+            pilot_user_id=current_user.id,
+            flight_plan_id=flight_plan_id,
+        )
+        if plan is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Flight plan not found")
+        FlightPlanService._ensure_draft(plan)
+        return FlightPlanService._get_signature_service().presign_for_plan(plan=plan, content_type=content_type)
 
     @staticmethod
     async def submit(db: AsyncSession, current_user: User, flight_plan_id: UUID) -> FlightPlan:
