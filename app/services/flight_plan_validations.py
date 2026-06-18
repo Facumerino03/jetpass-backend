@@ -12,12 +12,6 @@ def ensure_valid_icao_code(value: str) -> str:
     return normalized
 
 
-def ensure_all_aerodromes_distinct(*codes: str) -> None:
-    normalized = [ensure_valid_icao_code(code) for code in codes]
-    if len(set(normalized)) != len(normalized):
-        raise ValueError("Aerodrome codes must be distinct")
-
-
 def hhmm_to_minutes(value: str) -> int:
     if not _HHMM_RE.fullmatch(value):
         raise ValueError("HHMM value must contain exactly 4 digits")

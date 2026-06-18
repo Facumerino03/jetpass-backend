@@ -98,22 +98,6 @@ async def test_service_creates_step_one_draft_for_pilot(db_session):
     assert plan.departure_aerodrome_icao == "SABE"
 
 
-@pytest.mark.asyncio
-async def test_service_rejects_duplicate_aerodromes(db_session):
-    pilot = await create_user(db_session, email="pilot@example.com", role=Role.PILOT)
-    payload = FlightPlanCreate(
-        departure_aerodrome_icao="SABE",
-        departure_eobt_utc=datetime(2026, 5, 18, 14, 30, tzinfo=timezone.utc),
-        destination_aerodrome_icao="SAEZ",
-        alternate1_aerodrome_icao="SADP",
-        alternate2_aerodrome_icao="SAEZ",
-    )
-
-    with pytest.raises(HTTPException) as exc:
-        await FlightPlanService.create_draft(db_session, pilot, payload)
-
-    assert exc.value.status_code == 422
-
 
 @pytest.mark.asyncio
 async def test_service_selects_aircraft_and_generates_snapshot(db_session):

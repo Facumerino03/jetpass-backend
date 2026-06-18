@@ -1,7 +1,6 @@
 import pytest
 
 from app.services.flight_plan_validations import (
-    ensure_all_aerodromes_distinct,
     ensure_rule_change_point_valid,
     ensure_valid_icao_code,
     hhmm_to_minutes,
@@ -16,10 +15,6 @@ def test_ensure_valid_icao_code_rejects_invalid_length():
     with pytest.raises(ValueError, match="ICAO code must be 4 alphanumeric characters"):
         ensure_valid_icao_code("SAE")
 
-
-def test_ensure_all_aerodromes_distinct_rejects_duplicates():
-    with pytest.raises(ValueError, match="Aerodrome codes must be distinct"):
-        ensure_all_aerodromes_distinct("SABE", "SAEZ", "SADP", "SAEZ")
 
 
 def test_hhmm_to_minutes_parses_time_duration():

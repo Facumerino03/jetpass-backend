@@ -16,7 +16,7 @@ from app.repositories.flight_plan_repository import FlightPlanRepository
 from app.repositories.flight_plan_status_history_repository import FlightPlanStatusHistoryRepository
 from app.repositories.profile_repository import ProfileRepository
 from app.schemas.flight_plan import FlightPlanCreate, FlightPlanUpdate
-from app.services.flight_plan_validations import ensure_all_aerodromes_distinct, ensure_rule_change_point_valid, hhmm_to_minutes
+from app.services.flight_plan_validations import ensure_rule_change_point_valid, hhmm_to_minutes
 
 
 class FlightPlanService:
@@ -33,15 +33,6 @@ class FlightPlanService:
     @staticmethod
     async def create_draft(db: AsyncSession, current_user: User, payload: FlightPlanCreate) -> FlightPlan:
         FlightPlanService._ensure_pilot(current_user)
-        try:
-            ensure_all_aerodromes_distinct(
-                payload.departure_aerodrome_icao,
-                payload.destination_aerodrome_icao,
-                payload.alternate1_aerodrome_icao,
-                payload.alternate2_aerodrome_icao,
-            )
-        except ValueError as exc:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 
         await FlightPlanService._ensure_controlled_aerodromes_active(
             db,
