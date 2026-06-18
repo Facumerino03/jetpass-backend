@@ -26,6 +26,12 @@ class Settings(BaseSettings):
     INTELLIGENCE_BASE_URL: str | None = None
     INTELLIGENCE_TIMEOUT_SECONDS: float = 5.0
 
+    S3_ENDPOINT_URL: str | None = None
+    S3_ACCESS_KEY_ID: str | None = None
+    S3_SECRET_ACCESS_KEY: str | None = None
+    S3_BUCKET_NAME: str = "jetpass"
+    S3_REGION: str = "us-east-1"
+
     model_config = SettingsConfigDict(
         env_file=_ENV_FILE,
         env_file_encoding="utf-8",
@@ -47,6 +53,10 @@ class Settings(BaseSettings):
         if self.APP_ENV == "test":
             return self.TEST_REDIS_URL
         return self.DEV_REDIS_URL
+
+    @property
+    def s3_configured(self) -> bool:
+        return bool(self.S3_ENDPOINT_URL and self.S3_ACCESS_KEY_ID and self.S3_SECRET_ACCESS_KEY)
 
 
 settings = Settings()
