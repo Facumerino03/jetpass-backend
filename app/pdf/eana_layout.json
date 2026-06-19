@@ -83,15 +83,6 @@
       "max_chars": 4,
       "align": "center"
     },
-    "flight_date": {
-      "type": "text_cells",
-      "x": 0,
-      "y": 0,
-      "font_size": 9,
-      "cell_width": 12,
-      "max_chars": 7,
-      "align": "center"
-    },
     "cruising_speed": {
       "type": "text_cells",
       "x": 63,

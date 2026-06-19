@@ -185,7 +185,13 @@ async def test_pilot_can_presign_upload_signature_and_submit_flight_plan(client_
 
     detail_response = await client.get(f"/flight-plans/{flight_plan_id}", headers=headers)
     assert detail_response.status_code == 200
-    assert detail_response.json()["official_pdf_url"]
+    detail = detail_response.json()
+    assert detail["official_pdf_url"]
+
+    official_pdf_key = f"flight-plans/{flight_plan_id}/official-eana.pdf"
+    assert storage.object_exists(key=official_pdf_key) is True
+    pdf_bytes = storage.get_object_bytes(key=official_pdf_key)
+    assert len(pdf_bytes) > 1000
 
     official_pdf_response = await client.get(
         f"/flight-plans/{flight_plan_id}/official-pdf",

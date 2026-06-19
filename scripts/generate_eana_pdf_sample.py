@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
-"""Generate a sample filled EANA PDF for local visual calibration."""
+"""Generate a sample filled EANA PDF for local visual calibration.
+
+mark_fields semantics (calibration only):
+  True  = draw black block (strike) = pilot does NOT have that item (DB False)
+  False = leave printed letter visible = pilot HAS that item (DB True)
+
+text_fields go in text_fields only (never in mark_fields).
+flight_date is stored in DB but is not rendered on the EANA PDF template.
+"""
 
 from __future__ import annotations
 
