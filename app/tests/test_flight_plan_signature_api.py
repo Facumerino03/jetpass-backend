@@ -16,9 +16,12 @@ from app.models import flight_plan_status_history as _history_model
 from app.models import profiles as _profiles_model
 from app.models import user as _user_model
 from app.repositories.controlled_aerodrome_repository import ControlledAerodromeRepository
-from app.routes.flight_plans import get_flight_plan_signature_service
+from app.routes.flight_plans import get_flight_plan_official_pdf_service, get_flight_plan_signature_service
+from app.pdf.eana_flight_plan_pdf_generator import EanaFlightPlanPdfGenerator
+from app.services.flight_plan_official_pdf_service import FlightPlanOfficialPdfService
 from app.services.flight_plan_service import FlightPlanService
 from app.services.flight_plan_signature_service import FlightPlanSignatureService
+from app.tests.png_fixtures import TINY_PNG
 from app.services.object_storage_service import ObjectStorageService
 
 
@@ -41,6 +44,16 @@ async def client_with_storage():
         storage = ObjectStorageService(app_settings=settings, s3_client=s3_client)
         signature_service = FlightPlanSignatureService(storage=storage)
         FlightPlanService._signature_service = signature_service
+        try:
+            pdf_generator = EanaFlightPlanPdfGenerator()
+        except Exception:
+            pytest.skip("EANA template PDF not found")
+        official_pdf_service = FlightPlanOfficialPdfService(
+            storage=storage,
+            signature_service=signature_service,
+            pdf_generator=pdf_generator,
+        )
+        FlightPlanService._official_pdf_service = official_pdf_service
 
         engine = create_async_engine("sqlite+aiosqlite:///:memory:")
         async with engine.begin() as conn:
@@ -65,12 +78,14 @@ async def client_with_storage():
 
         app.dependency_overrides[get_db] = override_get_db
         app.dependency_overrides[get_flight_plan_signature_service] = lambda: signature_service
+        app.dependency_overrides[get_flight_plan_official_pdf_service] = lambda: official_pdf_service
 
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as test_client:
             yield test_client, storage
 
         FlightPlanService._signature_service = None
+        FlightPlanService._official_pdf_service = None
         app.dependency_overrides.clear()
         await engine.dispose()
 
@@ -154,7 +169,7 @@ async def test_pilot_can_presign_upload_signature_and_submit_flight_plan(client_
     assert presign_response.status_code == 200
     presign_data = presign_response.json()
     signature_key = presign_data["signature_key"]
-    storage.put_object(key=signature_key, body=b"signature-png", content_type="image/png")
+    storage.put_object(key=signature_key, body=TINY_PNG, content_type="image/png")
 
     patch_signature_response = await client.patch(
         f"/flight-plans/{flight_plan_id}",
@@ -167,6 +182,17 @@ async def test_pilot_can_presign_upload_signature_and_submit_flight_plan(client_
     submit_response = await client.post(f"/flight-plans/{flight_plan_id}/submit", headers=headers)
     assert submit_response.status_code == 200
     assert submit_response.json()["status"] == "pending_approval"
+
+    detail_response = await client.get(f"/flight-plans/{flight_plan_id}", headers=headers)
+    assert detail_response.status_code == 200
+    assert detail_response.json()["official_pdf_url"]
+
+    official_pdf_response = await client.get(
+        f"/flight-plans/{flight_plan_id}/official-pdf",
+        headers=headers,
+    )
+    assert official_pdf_response.status_code == 200
+    assert official_pdf_response.json()["official_pdf_url"]
 
 
 @pytest.mark.asyncio

@@ -16,18 +16,27 @@ from app.repositories.flight_plan_repository import FlightPlanRepository
 from app.repositories.flight_plan_status_history_repository import FlightPlanStatusHistoryRepository
 from app.repositories.profile_repository import ProfileRepository
 from app.schemas.flight_plan import FlightPlanCreate, FlightPlanUpdate
+from app.services.flight_plan_official_pdf_service import FlightPlanOfficialPdfService
 from app.services.flight_plan_signature_service import FlightPlanSignatureService
 from app.services.flight_plan_validations import ensure_rule_change_point_valid, hhmm_to_minutes
 
 
 class FlightPlanService:
     _signature_service: FlightPlanSignatureService | None = None
+    _official_pdf_service: FlightPlanOfficialPdfService | None = None
 
     @classmethod
     def _get_signature_service(cls) -> FlightPlanSignatureService:
         if cls._signature_service is None:
             cls._signature_service = FlightPlanSignatureService()
         return cls._signature_service
+
+    @classmethod
+    def _get_official_pdf_service(cls) -> FlightPlanOfficialPdfService:
+        if cls._official_pdf_service is None:
+            cls._official_pdf_service = FlightPlanOfficialPdfService()
+        return cls._official_pdf_service
+
     @staticmethod
     def _ensure_pilot(current_user: User) -> None:
         if current_user.role != Role.PILOT:
@@ -221,6 +230,9 @@ class FlightPlanService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Flight plan not found")
         FlightPlanService._ensure_draft(plan)
         FlightPlanService._validate_complete_for_submit(plan)
+
+        official_pdf_key = FlightPlanService._get_official_pdf_service().generate_and_store(plan)
+        await FlightPlanRepository.update(plan, official_pdf_key=official_pdf_key)
 
         await FlightPlanService._transition(db, plan, to_status=FlightPlanStatus.FILED, updated_by_user_id=current_user.id, reason="submitted")
         await FlightPlanApprovalRepository.create(

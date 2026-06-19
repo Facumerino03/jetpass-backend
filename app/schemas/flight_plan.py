@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from app.models.aircraft import WakeTurbulenceCat
 from app.models.flight_plan import FlightPlan, FlightPlanStatus, FlightRules, FlightType
 from app.models.flight_plan_approval import FlightPlanApprovalActor, FlightPlanApprovalStatus
+from app.services.flight_plan_official_pdf_service import FlightPlanOfficialPdfService
 from app.services.flight_plan_signature_service import FlightPlanSignatureService
 from app.services.flight_plan_validations import ensure_valid_icao_code
 
@@ -19,6 +20,11 @@ class FlightPlanSignaturePresignResponse(BaseModel):
     upload_url: str
     signature_key: str
     expires_in: int
+
+
+class FlightPlanOfficialPdfUrlResponse(BaseModel):
+    official_pdf_url: str
+    expires_in: int = 3600
 
 
 class FlightPlanCreate(BaseModel):
@@ -159,7 +165,8 @@ class FlightPlanPublic(BaseModel):
     remarks_present: bool
     remarks: str | None
     pilot_in_command: str | None
-    signature_url: str | None
+    signature_url: str | None = None
+    official_pdf_url: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -169,10 +176,15 @@ class FlightPlanPublic(BaseModel):
         plan: FlightPlan,
         *,
         signature_service: FlightPlanSignatureService | None = None,
+        official_pdf_service: FlightPlanOfficialPdfService | None = None,
     ) -> "FlightPlanPublic":
-        service = signature_service or FlightPlanSignatureService()
+        signature_resolver = signature_service or FlightPlanSignatureService()
+        official_pdf_resolver = official_pdf_service or FlightPlanOfficialPdfService()
         payload = cls.model_validate(plan).model_dump()
-        payload["signature_url"] = service.resolve_public_signature_url(stored_value=plan.signature_url)
+        payload["signature_url"] = signature_resolver.resolve_public_signature_url(stored_value=plan.signature_url)
+        payload["official_pdf_url"] = official_pdf_resolver.resolve_public_official_pdf_url(
+            stored_value=plan.official_pdf_key
+        )
         return cls.model_validate(payload)
 
 
@@ -186,8 +198,13 @@ class FlightPlanDetailPublic(FlightPlanPublic):
         plan: FlightPlan,
         *,
         signature_service: FlightPlanSignatureService | None = None,
+        official_pdf_service: FlightPlanOfficialPdfService | None = None,
     ) -> "FlightPlanDetailPublic":
-        base = FlightPlanPublic.from_model(plan, signature_service=signature_service)
+        base = FlightPlanPublic.from_model(
+            plan,
+            signature_service=signature_service,
+            official_pdf_service=official_pdf_service,
+        )
         return cls(
             **base.model_dump(),
             approvals=[FlightPlanApprovalPublic.model_validate(item) for item in plan.approvals],

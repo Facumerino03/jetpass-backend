@@ -136,3 +136,12 @@ class ObjectStorageService:
         )
         client.delete_object(Bucket=bucket, Key=source_key)
         return dest_key
+
+    def get_object_bytes(self, *, key: str) -> bytes:
+        self._ensure_configured()
+        client = self._get_client()
+        response = client.get_object(Bucket=self._settings.S3_BUCKET_NAME, Key=key)
+        body = response["Body"].read()
+        if isinstance(body, bytes):
+            return body
+        return bytes(body)

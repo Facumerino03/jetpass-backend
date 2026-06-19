@@ -23,6 +23,7 @@ from app.schemas.flight_plan import (
     FlightPlanCreate,
     FlightPlanDecisionRequest,
     FlightPlanDetailPublic,
+    FlightPlanOfficialPdfUrlResponse,
     FlightPlanPublic,
     FlightPlanSignaturePresignRequest,
     FlightPlanSignaturePresignResponse,
@@ -30,6 +31,7 @@ from app.schemas.flight_plan import (
     FlightPlanUpdate,
 )
 from app.schemas.intelligence import IntelligenceAerodromeRequest, IntelligenceRunRequest, IntelligenceRunResponse
+from app.services.flight_plan_official_pdf_service import FlightPlanOfficialPdfService
 from app.services.flight_plan_service import FlightPlanService
 from app.services.flight_plan_signature_service import FlightPlanSignatureService
 from app.services.intelligence_client import IntelligenceClient
@@ -43,6 +45,16 @@ def get_flight_plan_signature_service() -> FlightPlanSignatureService:
 
 
 FlightPlanSignatureServiceDep = Annotated[FlightPlanSignatureService, Depends(get_flight_plan_signature_service)]
+
+
+def get_flight_plan_official_pdf_service() -> FlightPlanOfficialPdfService:
+    return FlightPlanService._get_official_pdf_service()
+
+
+FlightPlanOfficialPdfServiceDep = Annotated[
+    FlightPlanOfficialPdfService,
+    Depends(get_flight_plan_official_pdf_service),
+]
 
 
 async def _enrich_coordinates(db: AsyncSession, icao_codes: list[str]) -> None:
@@ -234,10 +246,15 @@ async def create_flight_plan(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: CurrentActiveUserDep,
     signature_service: FlightPlanSignatureServiceDep,
+    official_pdf_service: FlightPlanOfficialPdfServiceDep,
 ) -> FlightPlanPublic:
     plan = await FlightPlanService.create_draft(db, current_user, payload)
     plan = await FlightPlanRepository.get_by_id(db, flight_plan_id=plan.id)
-    return FlightPlanPublic.from_model(plan, signature_service=signature_service)
+    return FlightPlanPublic.from_model(
+        plan,
+        signature_service=signature_service,
+        official_pdf_service=official_pdf_service,
+    )
 
 
 @router.get("")
@@ -245,9 +262,17 @@ async def list_flight_plans(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: CurrentActiveUserDep,
     signature_service: FlightPlanSignatureServiceDep,
+    official_pdf_service: FlightPlanOfficialPdfServiceDep,
 ) -> list[FlightPlanPublic]:
     plans = await FlightPlanService.list_visible(db, current_user)
-    return [FlightPlanPublic.from_model(plan, signature_service=signature_service) for plan in plans]
+    return [
+        FlightPlanPublic.from_model(
+            plan,
+            signature_service=signature_service,
+            official_pdf_service=official_pdf_service,
+        )
+        for plan in plans
+    ]
 
 
 @router.get("/{flight_plan_id}")
@@ -256,9 +281,14 @@ async def get_flight_plan(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: CurrentActiveUserDep,
     signature_service: FlightPlanSignatureServiceDep,
+    official_pdf_service: FlightPlanOfficialPdfServiceDep,
 ) -> FlightPlanDetailPublic:
     plan = await FlightPlanService.get_visible(db, current_user, flight_plan_id)
-    return FlightPlanDetailPublic.from_model(plan, signature_service=signature_service)
+    return FlightPlanDetailPublic.from_model(
+        plan,
+        signature_service=signature_service,
+        official_pdf_service=official_pdf_service,
+    )
 
 
 @router.post("/{flight_plan_id}/signature/presign")
@@ -284,10 +314,31 @@ async def update_flight_plan(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: CurrentActiveUserDep,
     signature_service: FlightPlanSignatureServiceDep,
+    official_pdf_service: FlightPlanOfficialPdfServiceDep,
 ) -> FlightPlanPublic:
     plan = await FlightPlanService.update_draft(db, current_user, flight_plan_id, payload)
     plan = await FlightPlanRepository.get_by_id(db, flight_plan_id=plan.id)
-    return FlightPlanPublic.from_model(plan, signature_service=signature_service)
+    return FlightPlanPublic.from_model(
+        plan,
+        signature_service=signature_service,
+        official_pdf_service=official_pdf_service,
+    )
+
+
+@router.get("/{flight_plan_id}/official-pdf")
+async def get_flight_plan_official_pdf(
+    flight_plan_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: CurrentActiveUserDep,
+    official_pdf_service: FlightPlanOfficialPdfServiceDep,
+) -> FlightPlanOfficialPdfUrlResponse:
+    plan = await FlightPlanService.get_visible(db, current_user, flight_plan_id)
+    if plan.official_pdf_key is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Official PDF not found")
+    official_pdf_url = official_pdf_service.resolve_public_official_pdf_url(stored_value=plan.official_pdf_key)
+    if official_pdf_url is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Official PDF not found")
+    return FlightPlanOfficialPdfUrlResponse(official_pdf_url=official_pdf_url)
 
 
 @router.post("/{flight_plan_id}/submit")

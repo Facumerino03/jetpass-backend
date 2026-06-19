@@ -28,6 +28,18 @@ from app.schemas.flight_plan import FlightPlanCreate, FlightPlanUpdate
 from app.services.flight_plan_service import FlightPlanService
 
 
+@pytest.fixture(autouse=True)
+def fake_official_pdf_service():
+    class FakeOfficialPdfService:
+        def generate_and_store(self, plan):
+            return f"flight-plans/{plan.id}/official-eana.pdf"
+
+    previous = FlightPlanService._official_pdf_service
+    FlightPlanService._official_pdf_service = FakeOfficialPdfService()
+    yield
+    FlightPlanService._official_pdf_service = previous
+
+
 @pytest.fixture
 async def db_session():
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")

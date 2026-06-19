@@ -102,6 +102,7 @@ class FlightPlan(Base):
 
     pilot_in_command: Mapped[str | None] = mapped_column(String(255), nullable=True)
     signature_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    official_pdf_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))

@@ -1,0 +1,368 @@
+{
+  "template_path": "docs/eana_flight_plan_template.pdf",
+  "page_index": 0,
+  "_comment": "Coordinates use PDF points, origin bottom-left. text_cells = char boxes; text_lines = multiline wrap with per-line x/y/max_width",
+  "fields": {
+    "aircraft_identification_snapshot": {
+      "type": "text_cells",
+      "x": 182,
+      "y": 631,
+      "font_size": 10,
+      "cell_width": 14,
+      "max_chars": 7,
+      "align": "center"
+    },
+    "flight_rules": {
+      "type": "text",
+      "x": 350,
+      "y": 631,
+      "font_size": 10
+    },
+    "flight_type": {
+      "type": "text",
+      "x": 485,
+      "y": 631,
+      "font_size": 10
+    },
+    "aircraft_number": {
+      "type": "text_cells",
+      "x": 65,
+      "y": 586,
+      "font_size": 10,
+      "cell_width": 19,
+      "max_chars": 2,
+      "align": "center"
+    },
+    "aircraft_type_designator_snapshot": {
+      "type": "text_cells",
+      "x": 163,
+      "y": 586,
+      "font_size": 10,
+      "cell_width": 14,
+      "max_chars": 4,
+      "align": "center"
+    },
+    "wake_turbulence_category_snapshot": {
+      "type": "text_cells",
+      "x": 325,
+      "y": 587,
+      "font_size": 10,
+      "cell_width": 12,
+      "max_chars": 1,
+      "align": "center"
+    },
+    "equipment_com_nav_snapshot": {
+      "type": "text",
+      "x": 440,
+      "y": 587,
+      "font_size": 8,
+      "max_width": 180
+    },
+    "equipment_surveillance_snapshot": {
+      "type": "text",
+      "x": 0,
+      "y": 0,
+      "font_size": 8,
+      "max_width": 180
+    },
+    "departure_aerodrome_icao": {
+      "type": "text_cells",
+      "x": 202,
+      "y": 539,
+      "font_size": 10,
+      "cell_width": 14,
+      "max_chars": 4,
+      "align": "center"
+    },
+    "departure_time_utc": {
+      "type": "text_cells",
+      "x": 355,
+      "y": 539,
+      "font_size": 10,
+      "cell_width": 14,
+      "max_chars": 4,
+      "align": "center"
+    },
+    "flight_date": {
+      "type": "text_cells",
+      "x": 0,
+      "y": 0,
+      "font_size": 9,
+      "cell_width": 12,
+      "max_chars": 7,
+      "align": "center"
+    },
+    "cruising_speed": {
+      "type": "text_cells",
+      "x": 63,
+      "y": 497,
+      "font_size": 10,
+      "cell_width": 14,
+      "max_chars": 5,
+      "align": "center"
+    },
+    "cruising_level": {
+      "type": "text_cells",
+      "x": 190,
+      "y": 497,
+      "font_size": 10,
+      "cell_width": 14,
+      "max_chars": 5,
+      "align": "center"
+    },
+    "route": {
+      "type": "text_lines",
+      "font_size": 9,
+      "lines": [
+        { "x": 300, "y": 497, "max_width": 245, "_comment": "renglón 1: corto, a la derecha del nivel" },
+        { "x": 48, "y": 481, "max_width": 490, "_comment": "renglón 2: ancho completo" },
+        { "x": 48, "y": 465, "max_width": 490, "_comment": "renglón 3: ancho completo" },
+        { "x": 48, "y": 449, "max_width": 490, "_comment": "renglón 4: ancho completo" },
+        { "x": 48, "y": 433, "max_width": 470, "_comment": "renglón 5: corto a la derecha (<<=)" }
+      ]
+    },
+    "total_eet": {
+      "type": "text_cells",
+      "x": 236,
+      "y": 389,
+      "font_size": 10,
+      "cell_width": 14,
+      "max_chars": 4,
+      "align": "center"
+    },
+    "destination_aerodrome_icao": {
+      "type": "text_cells",
+      "x": 113,
+      "y": 389,
+      "font_size": 10,
+      "cell_width": 14,
+      "max_chars": 4,
+      "align": "center"
+    },
+    "alternate1_aerodrome_icao": {
+      "type": "text_cells",
+      "x": 352,
+      "y": 389,
+      "font_size": 10,
+      "cell_width": 14,
+      "max_chars": 4,
+      "align": "center"
+    },
+    "alternate2_aerodrome_icao": {
+      "type": "text_cells",
+      "x": 461,
+      "y": 389,
+      "font_size": 10,
+      "cell_width": 14,
+      "max_chars": 4,
+      "align": "center"
+    },
+    "other_information": {
+      "type": "text_lines",
+      "font_size": 9,
+      "lines": [
+        { "x": 90, "y": 349, "max_width": 470, "_comment": "renglón 1: corto, a la derecha del nivel" },
+        { "x": 43, "y": 333, "max_width": 510, "_comment": "renglón 2: ancho completo" },
+        { "x": 43, "y": 318, "max_width": 510, "_comment": "renglón 3: ancho completo" },
+        { "x": 43, "y": 303, "max_width": 470, "_comment": "renglón 4: corto a la derecha (<<=)" }
+      ]
+    },
+    "endurance": {
+      "type": "text_cells",
+      "x": 85,
+      "y": 234,
+      "font_size": 10,
+      "cell_width": 19,
+      "max_chars": 4,
+      "align": "center"
+    },
+    "persons_on_board": {
+      "type": "text",
+      "x": 225,
+      "y": 234,
+      "font_size": 10,
+      "max_width": 100
+
+    },
+    "emergency_radio_uhf": {
+      "type": "mark",
+      "mark": "block",
+      "x": 427,
+      "y": 229,
+      "width": 17,
+      "height": 16
+    },
+    "emergency_radio_vhf": {
+      "type": "mark",
+      "mark": "block",
+      "x": 458,
+      "y": 229,
+      "width": 18,
+      "height": 16
+    },
+    "emergency_radio_elt": {
+      "type": "mark",
+      "mark": "block",
+      "x": 500,
+      "y": 229,
+      "width": 12,
+      "height": 16
+    },
+    "survival_equipment_present": {
+      "type": "mark",
+      "mark": "block",
+      "x": 103,
+      "y": 193,
+      "width": 17,
+      "height": 16
+    },
+    "survival_polar": {
+      "type": "mark",
+      "mark": "block",
+      "x": 138,
+      "y": 193,
+      "width": 17,
+      "height": 16
+    },
+    "survival_desert": {
+      "type": "mark",
+      "mark": "block",
+      "x": 179,
+      "y": 193,
+      "width": 17,
+      "height": 16
+    },
+    "survival_maritime": {
+      "type": "mark",
+      "mark": "block",
+      "x": 219,
+      "y": 193,
+      "width": 17,
+      "height": 16
+    },
+    "survival_jungle": {
+      "type": "mark",
+      "mark": "block",
+      "x": 267,
+      "y": 193,
+      "width": 17,
+      "height": 16
+    },
+    "life_jackets_present": {
+      "type": "mark",
+      "mark": "block",
+      "x": 322,
+      "y": 193,
+      "width": 12,
+      "height": 16
+    },
+    "life_jackets_lights": {
+      "type": "mark",
+      "mark": "block",
+      "x": 358,
+      "y": 193,
+      "width": 17,
+      "height": 16
+    },
+    "life_jackets_fluorescein": {
+      "type": "mark",
+      "mark": "block",
+      "x": 400,
+      "y": 193,
+      "width": 17,
+      "height": 16
+    },
+    "life_jackets_uhf": {
+      "type": "mark",
+      "mark": "block",
+      "x": 440,
+      "y": 193,
+      "width": 17,
+      "height": 16
+    },
+    "life_jackets_vhf": {
+      "type": "mark",
+      "mark": "block",
+      "x": 479,
+      "y": 193,
+      "width": 12,
+      "height": 16
+    },
+    "dinghies_present": {
+      "type": "mark",
+      "mark": "block",
+      "x": 66,
+      "y": 144,
+      "width": 17,
+      "height": 16
+    },
+    "dinghies_cover_present": { "type": "mark",
+      "mark": "block",
+      "x": 282,
+      "y": 144,
+      "width": 17,
+      "height": 16
+    },
+    "dinghies_number": {
+      "type": "text_cells",
+      "x": 103,
+      "y": 148,
+      "font_size": 10,
+      "cell_width": 20,
+      "max_chars": 2,
+      "align": "center"
+    },
+    "dinghies_capacity": {
+      "type": "text_cells",
+      "x": 189,
+      "y": 148,
+      "font_size": 10,
+      "cell_width": 14,
+      "max_chars": 4,
+      "align": "center"
+    },
+    "dinghies_color": {
+      "type": "text",
+      "x": 338,
+      "y": 148,
+      "font_size": 9,
+      "max_width": 122
+    },
+    "color_and_markings_snapshot": {
+      "type": "text",
+      "x": 104,
+      "y": 119,
+      "font_size": 9,
+      "max_width": 425
+    },
+    "remarks_present": {
+      "type": "mark",
+      "mark": "block",
+      "x": 66,
+      "y": 86,
+      "width": 17,
+      "height": 16
+    },
+    "remarks": {
+      "type": "text",
+      "x": 106,
+      "y": 90,
+      "font_size": 9,
+      "max_width": 380
+    },
+    "pilot_in_command": {
+      "type": "text",
+      "x": 106,
+      "y": 61,
+      "font_size": 9,
+      "max_width": 270
+    },
+    "signature": {
+      "type": "image",
+      "x": 420,
+      "y": 15,
+      "width": 100,
+      "height": 40
+    }
+  }
+}
