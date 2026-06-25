@@ -7,18 +7,17 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.core.database import Base
 
 
-class ControlledAerodrome(Base):
-    __tablename__ = "controlled_aerodromes"
+class Aerodrome(Base):
+    __tablename__ = "aerodromes"
 
     id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
-    icao_code: Mapped[str] = mapped_column(String(4), nullable=False, unique=True, index=True)
+    local_identifier: Mapped[str] = mapped_column(String(16), nullable=False, unique=True, index=True)
+    icao_code: Mapped[str | None] = mapped_column(String(4), nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(160), nullable=False)
+    latitude: Mapped[float] = mapped_column(Float, nullable=False)
+    longitude: Mapped[float] = mapped_column(Float, nullable=False)
+    is_controlled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
-    traffic_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    flight_rules: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    category: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
-    longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

@@ -10,7 +10,7 @@ from app.models.flight_plan_approval import FlightPlanApprovalActor, FlightPlanA
 from app.models.profiles import AuthorityType
 from app.models.user import Role, User
 from app.repositories.aircraft_repository import AircraftRepository
-from app.repositories.controlled_aerodrome_repository import ControlledAerodromeRepository
+from app.repositories.aerodrome_repository import AerodromeRepository
 from app.repositories.flight_plan_approval_repository import FlightPlanApprovalRepository
 from app.repositories.flight_plan_repository import FlightPlanRepository
 from app.repositories.flight_plan_status_history_repository import FlightPlanStatusHistoryRepository
@@ -55,7 +55,12 @@ class FlightPlanService:
     async def create_draft(db: AsyncSession, current_user: User, payload: FlightPlanCreate) -> FlightPlan:
         FlightPlanService._ensure_pilot(current_user)
 
-        await FlightPlanService._ensure_controlled_aerodromes_active(
+        (
+            departure_aerodrome_icao,
+            destination_aerodrome_icao,
+            alternate1_aerodrome_icao,
+            alternate2_aerodrome_icao,
+        ) = await FlightPlanService._resolve_aerodrome_location_codes(
             db,
             payload.departure_aerodrome_icao,
             payload.destination_aerodrome_icao,
@@ -67,12 +72,12 @@ class FlightPlanService:
             db,
             pilot_user_id=current_user.id,
             pilot_in_command=FlightPlanService._pilot_in_command_name(current_user),
-            departure_aerodrome_icao=payload.departure_aerodrome_icao,
+            departure_aerodrome_icao=departure_aerodrome_icao,
             departure_time_utc=payload.departure_time_utc,
             flight_date=payload.flight_date,
-            destination_aerodrome_icao=payload.destination_aerodrome_icao,
-            alternate1_aerodrome_icao=payload.alternate1_aerodrome_icao,
-            alternate2_aerodrome_icao=payload.alternate2_aerodrome_icao,
+            destination_aerodrome_icao=destination_aerodrome_icao,
+            alternate1_aerodrome_icao=alternate1_aerodrome_icao,
+            alternate2_aerodrome_icao=alternate2_aerodrome_icao,
         )
         await db.commit()
         await db.refresh(plan)
@@ -373,11 +378,18 @@ class FlightPlanService:
         return plan
 
     @staticmethod
-    async def _ensure_controlled_aerodromes_active(db: AsyncSession, *icao_codes: str) -> None:
-        for icao_code in icao_codes:
-            aerodrome = await ControlledAerodromeRepository.get_by_icao(db, icao_code=icao_code)
+    async def _resolve_aerodrome_location_codes(db: AsyncSession, *references: str) -> tuple[str, ...]:
+        resolved: list[str] = []
+        for reference in references:
+            aerodrome = await AerodromeRepository.get_by_location_code(db, code=reference)
             if aerodrome is None or not aerodrome.is_active:
                 raise HTTPException(
                     status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail=f"Aerodrome {icao_code.upper()} is not in the active controlled catalog",
+                    detail=f"Aerodrome {reference.upper()} is not in the active catalog",
                 )
+            resolved.append(AerodromeRepository.fpl_location_code(aerodrome))
+        return tuple(resolved)
+
+    @staticmethod
+    async def _ensure_aerodromes_active(db: AsyncSession, *references: str) -> None:
+        await FlightPlanService._resolve_aerodrome_location_codes(db, *references)

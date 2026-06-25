@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.database import Base
 from app.models import aircraft as _aircraft_model
-from app.models import controlled_aerodrome as _controlled_aerodrome_model
+from app.models import aerodrome as _aerodrome_model
 from app.models import flight_plan as _flight_plan_model
 from app.models import flight_plan_approval as _approval_model
 from app.models import flight_plan_status_history as _history_model
@@ -18,7 +18,6 @@ from app.models.flight_plan_approval import FlightPlanApprovalStatus
 from app.models.profiles import AuthorityType
 from app.models.user import Role
 from app.repositories.aircraft_repository import AircraftRepository
-from app.repositories.controlled_aerodrome_repository import ControlledAerodromeRepository
 from app.repositories.flight_plan_approval_repository import FlightPlanApprovalRepository
 from app.repositories.flight_plan_status_history_repository import FlightPlanStatusHistoryRepository
 from app.repositories.flight_plan_repository import FlightPlanRepository
@@ -26,6 +25,7 @@ from app.repositories.profile_repository import ProfileRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas.flight_plan import FlightPlanCreate, FlightPlanUpdate
 from app.services.flight_plan_service import FlightPlanService
+from app.tests.aerodrome_fixtures import seed_flight_plan_aerodromes
 
 
 @pytest.fixture(autouse=True)
@@ -47,15 +47,7 @@ async def db_session():
         await conn.run_sync(Base.metadata.create_all)
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
     async with session_factory() as session:
-        await ControlledAerodromeRepository.upsert_many(
-            session,
-            items=[
-                {"icao_code": "SABE", "name": "Aeroparque", "is_active": True},
-                {"icao_code": "SAEZ", "name": "Ezeiza", "is_active": True},
-                {"icao_code": "SADP", "name": "El Palomar", "is_active": True},
-                {"icao_code": "SADF", "name": "San Fernando", "is_active": True},
-            ],
-        )
+        await seed_flight_plan_aerodromes(session)
         await session.commit()
         yield session
     await engine.dispose()

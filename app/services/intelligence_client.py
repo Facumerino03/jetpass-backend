@@ -23,6 +23,7 @@ class IntelligenceClient:
             "notam": None,
             "weather": None,
             "aerodrome_geo": None,
+            "aerodrome_catalog_sync": None,
             "alerts": [
                 {
                     "level": "warning",

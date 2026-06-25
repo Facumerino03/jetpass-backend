@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routes import aircraft, auth, flight_plans, health
+from app.routes import aircraft, auth, flight_plans, health, validation
 from app.core import database
 
 
@@ -30,6 +30,7 @@ def create_app() -> FastAPI:
     application.include_router(auth.router)
     application.include_router(aircraft.router)
     application.include_router(flight_plans.router)
+    application.include_router(validation.router)
     return application
 
 

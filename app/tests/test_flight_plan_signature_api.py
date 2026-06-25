@@ -9,13 +9,13 @@ from app.core.database import Base, get_db
 from app.main import app
 from app.models import aircraft as _aircraft_model
 from app.models import auth_session as _auth_session_model
-from app.models import controlled_aerodrome as _controlled_aerodrome_model
+from app.models import aerodrome as _aerodrome_model
 from app.models import flight_plan as _flight_plan_model
 from app.models import flight_plan_approval as _approval_model
 from app.models import flight_plan_status_history as _history_model
 from app.models import profiles as _profiles_model
 from app.models import user as _user_model
-from app.repositories.controlled_aerodrome_repository import ControlledAerodromeRepository
+from app.tests.aerodrome_fixtures import seed_flight_plan_aerodromes
 from app.routes.flight_plans import get_flight_plan_official_pdf_service, get_flight_plan_signature_service
 from app.pdf.eana_flight_plan_pdf_generator import EanaFlightPlanPdfGenerator
 from app.services.flight_plan_official_pdf_service import FlightPlanOfficialPdfService
@@ -61,15 +61,7 @@ async def client_with_storage():
 
         session_factory = async_sessionmaker(engine, expire_on_commit=False)
         async with session_factory() as session:
-            await ControlledAerodromeRepository.upsert_many(
-                session,
-                items=[
-                    {"icao_code": "SABE", "name": "Aeroparque", "is_active": True},
-                    {"icao_code": "SAEZ", "name": "Ezeiza", "is_active": True},
-                    {"icao_code": "SADP", "name": "El Palomar", "is_active": True},
-                    {"icao_code": "SADF", "name": "San Fernando", "is_active": True},
-                ],
-            )
+            await seed_flight_plan_aerodromes(session)
             await session.commit()
 
         async def override_get_db():

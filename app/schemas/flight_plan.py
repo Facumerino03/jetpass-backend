@@ -9,7 +9,7 @@ from app.models.flight_plan import FlightPlan, FlightPlanStatus, FlightRules, Fl
 from app.models.flight_plan_approval import FlightPlanApprovalActor, FlightPlanApprovalStatus
 from app.services.flight_plan_official_pdf_service import FlightPlanOfficialPdfService
 from app.services.flight_plan_signature_service import FlightPlanSignatureService
-from app.services.flight_plan_validations import ensure_valid_icao_code
+from app.services.flight_plan_validations import normalize_aerodrome_location_code
 
 
 class FlightPlanSignaturePresignRequest(BaseModel):
@@ -28,17 +28,17 @@ class FlightPlanOfficialPdfUrlResponse(BaseModel):
 
 
 class FlightPlanCreate(BaseModel):
-    departure_aerodrome_icao: str = Field(min_length=4, max_length=4)
+    departure_aerodrome_icao: str = Field(min_length=1, max_length=16)
     departure_time_utc: str = Field(min_length=4, max_length=4)
     flight_date: date
-    destination_aerodrome_icao: str = Field(min_length=4, max_length=4)
-    alternate1_aerodrome_icao: str = Field(min_length=4, max_length=4)
-    alternate2_aerodrome_icao: str = Field(min_length=4, max_length=4)
+    destination_aerodrome_icao: str = Field(min_length=1, max_length=16)
+    alternate1_aerodrome_icao: str = Field(min_length=1, max_length=16)
+    alternate2_aerodrome_icao: str = Field(min_length=1, max_length=16)
 
     @field_validator("departure_aerodrome_icao", "destination_aerodrome_icao", "alternate1_aerodrome_icao", "alternate2_aerodrome_icao")
     @classmethod
-    def normalize_icao(cls, value: str) -> str:
-        return ensure_valid_icao_code(value)
+    def normalize_aerodrome_code(cls, value: str) -> str:
+        return normalize_aerodrome_location_code(value)
 
 
 class FlightPlanUpdate(BaseModel):

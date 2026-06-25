@@ -25,11 +25,16 @@ class IntelligenceAerodromeRequest(BaseModel):
         return [ensure_valid_icao_code(v) for v in value]
 
 
+class IntelligenceCatalogSyncRequest(BaseModel):
+    force_refresh: bool = False
+
+
 class IntelligenceRunRequest(BaseModel):
     aerodrome: IntelligenceAerodromeRequest | None = None
     notam: IntelligenceAerodromeRequest | None = None
     weather: IntelligenceAerodromeRequest | None = None
     aerodrome_geo: IntelligenceAerodromeRequest | None = None
+    aerodrome_catalog_sync: IntelligenceCatalogSyncRequest | None = None
 
 
 class IntelligenceRunResponse(BaseModel):
@@ -38,5 +43,7 @@ class IntelligenceRunResponse(BaseModel):
     notam: dict[str, Any] | None = None
     weather: dict[str, Any] | None = None
     aerodrome_geo: dict[str, Any] | None = None
+    aerodrome_catalog_sync: dict[str, Any] | None = None
+    fpl_field18: dict[str, Any] | None = None
     alerts: list[dict[str, Any]] = []
     metadata: dict[str, Any] = {}

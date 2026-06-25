@@ -57,12 +57,12 @@ class FlightPlan(Base):
         Enum(FlightType, values_callable=lambda obj: [item.value for item in obj]),
         nullable=True,
     )
-    departure_aerodrome_icao: Mapped[str] = mapped_column(String(4), nullable=False, index=True)
+    departure_aerodrome_icao: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
     departure_time_utc: Mapped[str | None] = mapped_column(String(4), nullable=True)
     flight_date: Mapped[date | None] = mapped_column(Date, nullable=True)
-    destination_aerodrome_icao: Mapped[str] = mapped_column(String(4), nullable=False, index=True)
-    alternate1_aerodrome_icao: Mapped[str] = mapped_column(String(4), nullable=False)
-    alternate2_aerodrome_icao: Mapped[str] = mapped_column(String(4), nullable=False)
+    destination_aerodrome_icao: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    alternate1_aerodrome_icao: Mapped[str] = mapped_column(String(16), nullable=False)
+    alternate2_aerodrome_icao: Mapped[str] = mapped_column(String(16), nullable=False)
     cruising_speed: Mapped[str | None] = mapped_column(String(5), nullable=True)
     cruising_level: Mapped[str | None] = mapped_column(String(5), nullable=True)
     route: Mapped[str | None] = mapped_column(Text, nullable=True)

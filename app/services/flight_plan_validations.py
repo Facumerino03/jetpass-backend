@@ -1,6 +1,8 @@
 import re
 
+
 _ICAO_RE = re.compile(r"^[A-Z0-9]{4}$")
+_LOCATION_CODE_RE = re.compile(r"^[A-Z0-9]{1,16}$")
 _HHMM_RE = re.compile(r"^\d{4}$")
 
 
@@ -8,6 +10,13 @@ def ensure_valid_icao_code(value: str) -> str:
     normalized = value.upper()
     if not _ICAO_RE.fullmatch(normalized):
         raise ValueError("ICAO code must be 4 alphanumeric characters")
+    return normalized
+
+
+def normalize_aerodrome_location_code(value: str) -> str:
+    normalized = value.strip().upper()
+    if not _LOCATION_CODE_RE.fullmatch(normalized):
+        raise ValueError("Aerodrome code must be 1-16 alphanumeric characters")
     return normalized
 
 

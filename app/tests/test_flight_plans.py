@@ -6,13 +6,14 @@ from app.core.database import Base, get_db
 from app.main import app
 from app.models import aircraft as _aircraft_model
 from app.models import auth_session as _auth_session_model
-from app.models import controlled_aerodrome as _controlled_aerodrome_model
+from app.models import aerodrome as _aerodrome_model
 from app.models import flight_plan as _flight_plan_model
 from app.models import flight_plan_approval as _approval_model
 from app.models import flight_plan_status_history as _history_model
 from app.models import profiles as _profiles_model
 from app.models import user as _user_model
-from app.repositories.controlled_aerodrome_repository import ControlledAerodromeRepository
+from app.tests.aerodrome_fixtures import seed_aerodrome, seed_flight_plan_aerodromes
+from app.services.flight_plan_field18_service import FlightPlanField18Service
 
 
 @pytest.fixture
@@ -22,14 +23,15 @@ async def client():
         await conn.run_sync(Base.metadata.create_all)
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
     async with session_factory() as session:
-        await ControlledAerodromeRepository.upsert_many(
+        await seed_flight_plan_aerodromes(session)
+        await seed_aerodrome(
             session,
-            items=[
-                {"icao_code": "SABE", "name": "Aeroparque", "is_active": True},
-                {"icao_code": "SAEZ", "name": "Ezeiza", "is_active": True},
-                {"icao_code": "SADP", "name": "El Palomar", "is_active": True},
-                {"icao_code": "SADF", "name": "San Fernando", "is_active": True},
-            ],
+            local_identifier="MZA",
+            icao_code=None,
+            name="Mendoza El Plumerillo",
+            latitude=-32.8317,
+            longitude=-68.7928,
+            is_controlled=False,
         )
         await session.commit()
 
@@ -104,3 +106,83 @@ async def test_pilot_can_create_list_get_and_patch_draft_flight_plan(client):
 async def test_flight_plan_routes_require_authentication(client):
     response = await client.post("/flight-plans", json=step_one_payload())
     assert response.status_code == 401
+
+
+class FakeField18IntelligenceClient:
+    async def run(self, payload):
+        departure = payload["fpl_field18"]["fpl_fields"]["departure_aerodrome"]
+        if departure == "MZA":
+            return {
+                "intent": "fpl_field18",
+                "fpl_field18": {
+                    "computed_field18": "DEP/MZA3250S06848W",
+                    "suggestions": [],
+                    "fpl_updates": [
+                        {
+                            "field": "departure_aerodrome",
+                            "from_value": "MZA",
+                            "to_value": "ZZZZ",
+                            "reason": "Non-controlled aerodrome must use ZZZZ in item 13",
+                        }
+                    ],
+                    "alerts": [],
+                    "messages": [],
+                },
+            }
+        return {
+            "intent": "fpl_field18",
+            "fpl_field18": {
+                "computed_field18": "",
+                "suggestions": [],
+                "fpl_updates": [],
+                "alerts": [],
+                "messages": [],
+            },
+        }
+
+
+@pytest.mark.asyncio
+async def test_field18_preview_and_apply_routes(client, monkeypatch):
+    monkeypatch.setattr(
+        FlightPlanField18Service,
+        "_client",
+        lambda self: FakeField18IntelligenceClient(),
+    )
+    token = await register_pilot(client)
+    headers = auth_headers(token)
+
+    create_response = await client.post(
+        "/flight-plans",
+        json={
+            **step_one_payload(),
+            "departure_aerodrome_icao": "mza",
+        },
+        headers=headers,
+    )
+    assert create_response.status_code == 201
+    flight_plan_id = create_response.json()["id"]
+    assert create_response.json()["departure_aerodrome_icao"] == "MZA"
+
+    preview_response = await client.post(
+        f"/flight-plans/{flight_plan_id}/field18/preview",
+        headers=headers,
+    )
+    assert preview_response.status_code == 200
+    preview_body = preview_response.json()
+    assert preview_body["intent"] == "fpl_field18"
+    assert preview_body["field18"]["computed_field18"] == "DEP/MZA3250S06848W"
+    assert preview_body["field18"]["fpl_updates"][0]["to_value"] == "ZZZZ"
+
+    get_before_apply = await client.get(f"/flight-plans/{flight_plan_id}", headers=headers)
+    assert get_before_apply.json()["departure_aerodrome_icao"] == "MZA"
+    assert get_before_apply.json()["other_information"] is None
+
+    apply_response = await client.post(
+        f"/flight-plans/{flight_plan_id}/field18/apply",
+        headers=headers,
+    )
+    assert apply_response.status_code == 200
+    apply_body = apply_response.json()
+    assert apply_body["plan"]["departure_aerodrome_icao"] == "ZZZZ"
+    assert apply_body["plan"]["other_information"] == "DEP/MZA3250S06848W"
+    assert apply_body["field18"]["computed_field18"] == "DEP/MZA3250S06848W"

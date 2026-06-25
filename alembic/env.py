@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.core.config import settings
 from app.core.database import Base
-from app.models import aircraft, auth_session, controlled_aerodrome, flight_plan, flight_plan_approval, flight_plan_status_history, profiles, user
+from app.models import aircraft, aerodrome, auth_session, flight_plan, flight_plan_approval, flight_plan_status_history, profiles, user, validation_block, validation_criterion
 
 config = context.config
 if config.config_file_name is not None:

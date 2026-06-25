@@ -1,5 +1,3 @@
-import csv
-from io import StringIO
 from typing import Annotated
 from uuid import UUID
 
@@ -9,15 +7,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.security import CurrentActiveUserDep
 from app.models.user import Role
-from app.repositories.controlled_aerodrome_repository import ControlledAerodromeRepository
+from app.repositories.aerodrome_repository import AerodromeRepository
 from app.repositories.flight_plan_repository import FlightPlanRepository
-from app.schemas.controlled_aerodrome import (
-    ControlledAerodromeCSVImport,
-    ControlledAerodromeCreate,
-    ControlledAerodromeImportResult,
-    ControlledAerodromeJSONImport,
-    ControlledAerodromePublic,
-    ControlledAerodromeUpdate,
+from app.schemas.aerodrome import (
+    AerodromeCatalogSyncRequest,
+    AerodromeCatalogSyncResult,
+    AerodromePublic,
+    AerodromeUpdate,
 )
 from app.schemas.flight_plan import (
     FlightPlanCreate,
@@ -30,7 +26,10 @@ from app.schemas.flight_plan import (
     FlightPlanSubmitResponse,
     FlightPlanUpdate,
 )
+from app.schemas.fpl_field18 import FlightPlanField18ApplyResponse, FlightPlanField18PreviewResponse
 from app.schemas.intelligence import IntelligenceAerodromeRequest, IntelligenceRunRequest, IntelligenceRunResponse
+from app.services.aerodrome_catalog_sync_service import AerodromeCatalogSyncService
+from app.services.flight_plan_field18_service import FlightPlanField18Service
 from app.services.flight_plan_official_pdf_service import FlightPlanOfficialPdfService
 from app.services.flight_plan_service import FlightPlanService
 from app.services.flight_plan_signature_service import FlightPlanSignatureService
@@ -57,33 +56,31 @@ FlightPlanOfficialPdfServiceDep = Annotated[
 ]
 
 
-async def _enrich_coordinates(db: AsyncSession, icao_codes: list[str]) -> None:
-    missing = []
-    for icao_code in icao_codes:
-        aerodrome = await ControlledAerodromeRepository.get_by_icao(db, icao_code=icao_code)
-        if aerodrome is not None and aerodrome.latitude is None:
-            missing.append(aerodrome)
-    if not missing:
-        return
-    client = IntelligenceClient(
-        base_url=settings.INTELLIGENCE_BASE_URL,
-        timeout_seconds=settings.INTELLIGENCE_TIMEOUT_SECONDS,
-    )
-    response = await client.run({"aerodrome_geo": {"icaos": [a.icao_code for a in missing], "force_refresh": False}})
-    geo_data = response.get("aerodrome_geo") or {}
-    for aerodrome in missing:
-        coord = geo_data.get(aerodrome.icao_code, {})
-        lat = coord.get("lat")
-        lon = coord.get("lon")
-        if lat is not None and lon is not None:
-            await ControlledAerodromeRepository.update(aerodrome, latitude=lat, longitude=lon)
+def get_aerodrome_catalog_sync_service() -> AerodromeCatalogSyncService:
+    return AerodromeCatalogSyncService()
+
+
+AerodromeCatalogSyncServiceDep = Annotated[
+    AerodromeCatalogSyncService,
+    Depends(get_aerodrome_catalog_sync_service),
+]
+
+
+def get_flight_plan_field18_service() -> FlightPlanField18Service:
+    return FlightPlanField18Service()
+
+
+FlightPlanField18ServiceDep = Annotated[
+    FlightPlanField18Service,
+    Depends(get_flight_plan_field18_service),
+]
 
 
 def _ensure_catalog_manager(current_user) -> None:
     if current_user.role not in {Role.ADMIN, Role.ATC_AUTHORITY}:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only admins and authorities can manage controlled aerodromes",
+            detail="Only admins and authorities can manage aerodromes",
         )
 
 
@@ -124,120 +121,75 @@ async def flight_plan_run_intelligence(payload: IntelligenceRunRequest) -> Intel
 
 
 @router.get("/aerodromes")
-async def list_controlled_aerodromes_for_flight_plan(
+async def list_aerodromes_for_flight_plan(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: CurrentActiveUserDep,
     query: Annotated[str | None, Query(max_length=80)] = None,
     limit: Annotated[int | None, Query(ge=1, le=100)] = None,
-) -> list[ControlledAerodromePublic]:
-    aerodromes = await ControlledAerodromeRepository.list_active(db, query=query, limit=limit)
-    return [ControlledAerodromePublic.model_validate(item) for item in aerodromes]
+) -> list[AerodromePublic]:
+    aerodromes = await AerodromeRepository.list_active_for_flight_plan(db, query=query, limit=limit)
+    return [AerodromePublic.model_validate(item) for item in aerodromes]
 
 
 @router.get("/admin/aerodromes")
-async def list_controlled_aerodromes_admin(
+async def list_aerodromes_admin(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: CurrentActiveUserDep,
-) -> list[ControlledAerodromePublic]:
+    is_controlled: Annotated[bool | None, Query()] = None,
+) -> list[AerodromePublic]:
     _ensure_catalog_manager(current_user)
-    aerodromes = await ControlledAerodromeRepository.list_all(db)
-    return [ControlledAerodromePublic.model_validate(item) for item in aerodromes]
+    aerodromes = await AerodromeRepository.list_all(db, is_controlled=is_controlled)
+    return [AerodromePublic.model_validate(item) for item in aerodromes]
 
 
-@router.post("/admin/aerodromes", status_code=status.HTTP_201_CREATED)
-async def create_controlled_aerodrome(
-    payload: ControlledAerodromeCreate,
+@router.post("/admin/aerodromes/sync")
+async def sync_aerodromes_catalog(
+    payload: AerodromeCatalogSyncRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: CurrentActiveUserDep,
-) -> ControlledAerodromePublic:
+    sync_service: AerodromeCatalogSyncServiceDep,
+) -> AerodromeCatalogSyncResult:
     _ensure_catalog_manager(current_user)
-    existing = await ControlledAerodromeRepository.get_by_icao(db, icao_code=payload.icao_code)
-    if existing is not None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Controlled aerodrome already exists")
-    aerodrome = await ControlledAerodromeRepository.create(db, **payload.model_dump())
-    await db.commit()
-    await db.refresh(aerodrome)
-    await _enrich_coordinates(db, [aerodrome.icao_code])
-    await db.commit()
-    await db.refresh(aerodrome)
-    return ControlledAerodromePublic.model_validate(aerodrome)
+    return await sync_service.sync_catalog(db, force_refresh=payload.force_refresh)
 
 
-@router.patch("/admin/aerodromes/{icao_code}")
-async def update_controlled_aerodrome(
-    icao_code: str,
-    payload: ControlledAerodromeUpdate,
+@router.patch("/admin/aerodromes/{local_identifier}")
+async def update_aerodrome(
+    local_identifier: str,
+    payload: AerodromeUpdate,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: CurrentActiveUserDep,
-) -> ControlledAerodromePublic:
+) -> AerodromePublic:
     _ensure_catalog_manager(current_user)
-    aerodrome = await ControlledAerodromeRepository.get_by_icao(db, icao_code=icao_code)
-    if aerodrome is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Controlled aerodrome not found")
-    await ControlledAerodromeRepository.update(aerodrome, **payload.model_dump(exclude_unset=True))
-    await db.commit()
-    await db.refresh(aerodrome)
-    return ControlledAerodromePublic.model_validate(aerodrome)
-
-
-@router.delete("/admin/aerodromes/{icao_code}")
-async def deactivate_controlled_aerodrome(
-    icao_code: str,
-    db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: CurrentActiveUserDep,
-) -> ControlledAerodromePublic:
-    _ensure_catalog_manager(current_user)
-    aerodrome = await ControlledAerodromeRepository.get_by_icao(db, icao_code=icao_code)
-    if aerodrome is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Controlled aerodrome not found")
-    await ControlledAerodromeRepository.update(aerodrome, is_active=False)
-    await db.commit()
-    await db.refresh(aerodrome)
-    return ControlledAerodromePublic.model_validate(aerodrome)
-
-
-@router.post("/admin/aerodromes/import/json")
-async def import_controlled_aerodromes_json(
-    payload: ControlledAerodromeJSONImport,
-    db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: CurrentActiveUserDep,
-) -> ControlledAerodromeImportResult:
-    _ensure_catalog_manager(current_user)
-    upserted = await ControlledAerodromeRepository.upsert_many(
+    aerodrome = await AerodromeRepository.get_by_local_identifier(
         db,
-        items=[item.model_dump() for item in payload.items],
+        local_identifier=local_identifier,
     )
+    if aerodrome is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Aerodrome not found")
+    await AerodromeRepository.update(aerodrome, **payload.model_dump(exclude_unset=True))
     await db.commit()
-    icao_codes = [item.icao_code.upper() for item in payload.items]
-    await _enrich_coordinates(db, icao_codes)
-    await db.commit()
-    return ControlledAerodromeImportResult(upserted=upserted)
+    await db.refresh(aerodrome)
+    return AerodromePublic.model_validate(aerodrome)
 
 
-@router.post("/admin/aerodromes/import/csv")
-async def import_controlled_aerodromes_csv(
-    payload: ControlledAerodromeCSVImport,
+@router.delete("/admin/aerodromes/{local_identifier}")
+async def deactivate_aerodrome(
+    local_identifier: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: CurrentActiveUserDep,
-) -> ControlledAerodromeImportResult:
+) -> AerodromePublic:
     _ensure_catalog_manager(current_user)
-    reader = csv.DictReader(StringIO(payload.content))
-    items = []
-    for row in reader:
-        is_active_value = (row.get("is_active") or "true").strip().lower()
-        items.append(
-            {
-                "icao_code": row["icao_code"],
-                "name": row["name"],
-                "is_active": is_active_value in {"true", "1", "yes", "si", "sí"},
-            }
-        )
-    upserted = await ControlledAerodromeRepository.upsert_many(db, items=items)
+    aerodrome = await AerodromeRepository.get_by_local_identifier(
+        db,
+        local_identifier=local_identifier,
+    )
+    if aerodrome is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Aerodrome not found")
+    await AerodromeRepository.update(aerodrome, is_active=False)
     await db.commit()
-    icao_codes = [row["icao_code"].upper() for row in items]
-    await _enrich_coordinates(db, icao_codes)
-    await db.commit()
-    return ControlledAerodromeImportResult(upserted=upserted)
+    await db.refresh(aerodrome)
+    return AerodromePublic.model_validate(aerodrome)
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -322,6 +274,38 @@ async def update_flight_plan(
         plan,
         signature_service=signature_service,
         official_pdf_service=official_pdf_service,
+    )
+
+
+@router.post("/{flight_plan_id}/field18/preview")
+async def preview_flight_plan_field18(
+    flight_plan_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: CurrentActiveUserDep,
+    field18_service: FlightPlanField18ServiceDep,
+) -> FlightPlanField18PreviewResponse:
+    intent, field18 = await field18_service.preview(db, current_user, flight_plan_id)
+    return FlightPlanField18PreviewResponse(intent=intent, field18=field18)
+
+
+@router.post("/{flight_plan_id}/field18/apply")
+async def apply_flight_plan_field18(
+    flight_plan_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: CurrentActiveUserDep,
+    field18_service: FlightPlanField18ServiceDep,
+    signature_service: FlightPlanSignatureServiceDep,
+    official_pdf_service: FlightPlanOfficialPdfServiceDep,
+) -> FlightPlanField18ApplyResponse:
+    plan, field18 = await field18_service.apply(db, current_user, flight_plan_id)
+    plan = await FlightPlanRepository.get_by_id(db, flight_plan_id=plan.id)
+    return FlightPlanField18ApplyResponse(
+        plan=FlightPlanPublic.from_model(
+            plan,
+            signature_service=signature_service,
+            official_pdf_service=official_pdf_service,
+        ),
+        field18=field18,
     )
 
 

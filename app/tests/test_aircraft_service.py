@@ -96,17 +96,16 @@ def test_aircraft_create_rejects_blank_identification():
 @pytest.mark.asyncio
 async def test_aircraft_service_creates_updates_and_soft_deletes_for_pilot(db_session):
     pilot = await create_user(db_session)
-    service = AircraftService()
 
-    created = await service.create_for_pilot(db_session, pilot, aircraft_create_payload())
-    updated = await service.update_for_pilot(
+    created = await AircraftService.create_for_pilot(db_session, pilot, aircraft_create_payload())
+    updated = await AircraftService.update_for_pilot(
         db_session,
         pilot,
         created.id,
         AircraftUpdate(alias="Updated trainer", color_and_markings="White"),
     )
-    deleted = await service.delete_for_pilot(db_session, pilot, created.id)
-    fetched_after_delete = await service.get_for_pilot(db_session, pilot, created.id)
+    deleted = await AircraftService.delete_for_pilot(db_session, pilot, created.id)
+    fetched_after_delete = await AircraftService.get_for_pilot(db_session, pilot, created.id)
 
     assert created.owner_user_id == pilot.id
     assert created.identification == "LV-ABC"
@@ -125,7 +124,7 @@ async def test_aircraft_service_rejects_non_pilot_users(db_session):
     )
 
     with pytest.raises(HTTPException) as exc_info:
-        await AircraftService().create_for_pilot(db_session, user, aircraft_create_payload())
+        await AircraftService.create_for_pilot(db_session, user, aircraft_create_payload())
 
     assert exc_info.value.status_code == 403
     assert exc_info.value.detail == "Only pilots can manage aircraft"
