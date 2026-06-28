@@ -27,6 +27,8 @@ class Aircraft(Base):
     )
     alias: Mapped[str | None] = mapped_column(String(120), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    is_valid: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=None)
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     identification: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
     icao_type_designator: Mapped[str] = mapped_column(String(10), nullable=False)
     wake_turbulence_category: Mapped[WakeTurbulenceCat] = mapped_column(

@@ -76,6 +76,11 @@ class AircraftRepository:
         return aircraft
 
     @staticmethod
+    async def get_by_id(db: AsyncSession, *, aircraft_id: UUID) -> Aircraft | None:
+        result = await db.execute(select(Aircraft).where(Aircraft.id == aircraft_id))
+        return result.scalar_one_or_none()
+
+    @staticmethod
     async def list_active_by_owner(
         db: AsyncSession,
         *,

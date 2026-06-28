@@ -11,6 +11,7 @@ class FplField18Update(BaseModel):
         "destination_aerodrome",
         "alternate_aerodrome_1",
         "alternate_aerodrome_2",
+        "aircraft_type",
     ]
     from_value: str | None = None
     to_value: str

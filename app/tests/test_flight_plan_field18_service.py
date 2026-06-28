@@ -6,11 +6,14 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.database import Base
 from app.models import aerodrome as _aerodrome_model
+from app.models import aircraft as _aircraft_model
 from app.models import flight_plan as _flight_plan_model
 from app.models import user as _user_model
+from app.models.aircraft import WakeTurbulenceCat
 from app.models.user import Role
+from app.repositories.aircraft_repository import AircraftRepository
 from app.repositories.user_repository import UserRepository
-from app.schemas.flight_plan import FlightPlanCreate
+from app.schemas.flight_plan import FlightPlanCreate, FlightPlanUpdate
 from app.services.flight_plan_field18_service import FlightPlanField18Service
 from app.services.flight_plan_service import FlightPlanService
 from app.services.fpl_field18_mapper import build_fpl_field18_request
@@ -144,6 +147,75 @@ class StaleFromValueIntelligenceClient:
         }
 
 
+class InvalidAircraftTypeIntelligenceClient:
+    async def run(self, payload):
+        fpl_fields = payload["fpl_field18"]["fpl_fields"]
+        assert fpl_fields["aircraft_type"] == "C172"
+        assert fpl_fields["aircraft_type_is_valid"] is False
+        return {
+            "intent": "fpl_field18",
+            "fpl_field18": {
+                "computed_field18": "TYP/C172",
+                "suggestions": [
+                    {
+                        "indicator": "TYP/",
+                        "full_field": "TYP/C172",
+                        "reason": "Non-ICAO aircraft type requires TYP/ in field 18",
+                    }
+                ],
+                "fpl_updates": [
+                    {
+                        "field": "aircraft_type",
+                        "from_value": "C172",
+                        "to_value": "ZZZZ",
+                        "reason": "Non-ICAO aircraft type must use ZZZZ in item 9",
+                    }
+                ],
+                "alerts": [],
+                "messages": [],
+            },
+        }
+
+
+async def create_aircraft_with_type_validation(
+    db_session,
+    pilot,
+    *,
+    designator: str = "C172",
+    is_valid: bool | None = False,
+):
+    aircraft = await AircraftRepository.create(
+        db_session,
+        owner_user_id=pilot.id,
+        alias="Trainer",
+        identification="LV-ABC",
+        icao_type_designator=designator,
+        wake_turbulence_category=WakeTurbulenceCat.L,
+        equipment_com_nav="SDFGR",
+        equipment_surveillance="B1",
+        pbn_capabilities=None,
+        color_and_markings="White with blue stripes",
+    )
+    if is_valid is not None:
+        await AircraftRepository.update(
+            aircraft,
+            is_valid=is_valid,
+            verified_at=None if is_valid is None else aircraft.created_at,
+        )
+    await db_session.commit()
+    return aircraft
+
+
+async def create_plan_with_aircraft(db_session, pilot, aircraft):
+    plan = await create_plan_with_departure(db_session, pilot, departure="sabe")
+    return await FlightPlanService.update_draft(
+        db_session,
+        pilot,
+        plan.id,
+        FlightPlanUpdate(aircraft_id=aircraft.id),
+    )
+
+
 @pytest.mark.asyncio
 async def test_build_fpl_field18_request_maps_slots_and_skips_zzzz(db_session):
     pilot = await create_pilot(db_session)
@@ -265,3 +337,42 @@ async def test_preview_rejects_non_owner(db_session):
         await service.preview(db_session, other, plan.id)
 
     assert exc.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_build_fpl_field18_request_includes_aircraft_type_is_valid_when_known(db_session):
+    pilot = await create_pilot(db_session)
+    aircraft = await create_aircraft_with_type_validation(db_session, pilot, is_valid=False)
+    plan = await create_plan_with_aircraft(db_session, pilot, aircraft)
+
+    request = await build_fpl_field18_request(db_session, plan)
+
+    assert request["fpl_field18"]["fpl_fields"]["aircraft_type"] == "C172"
+    assert request["fpl_field18"]["fpl_fields"]["aircraft_type_is_valid"] is False
+
+
+@pytest.mark.asyncio
+async def test_build_fpl_field18_request_omits_aircraft_type_is_valid_when_pending(db_session):
+    pilot = await create_pilot(db_session)
+    aircraft = await create_aircraft_with_type_validation(db_session, pilot, is_valid=None)
+    plan = await create_plan_with_aircraft(db_session, pilot, aircraft)
+
+    request = await build_fpl_field18_request(db_session, plan)
+
+    assert request["fpl_field18"]["fpl_fields"]["aircraft_type"] == "C172"
+    assert "aircraft_type_is_valid" not in request["fpl_field18"]["fpl_fields"]
+
+
+@pytest.mark.asyncio
+async def test_apply_invalid_aircraft_type_persists_zzzz_and_typ_in_field18(db_session):
+    pilot = await create_pilot(db_session)
+    aircraft = await create_aircraft_with_type_validation(db_session, pilot, is_valid=False)
+    plan = await create_plan_with_aircraft(db_session, pilot, aircraft)
+    service = FlightPlanField18Service(intelligence_client=InvalidAircraftTypeIntelligenceClient())
+
+    updated_plan, result = await service.apply(db_session, pilot, plan.id)
+
+    assert result.computed_field18 == "TYP/C172"
+    assert result.suggestions[0]["indicator"] == "TYP/"
+    assert updated_plan.aircraft_type_designator_snapshot == "ZZZZ"
+    assert updated_plan.other_information == "TYP/C172"

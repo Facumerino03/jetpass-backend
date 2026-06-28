@@ -53,3 +53,45 @@ class IntelligenceClient:
                 return response.json()
         except httpx.HTTPError:
             return self.unavailable_response()
+
+    @staticmethod
+    def unavailable_aircraft_type_response(*, designator: str) -> dict[str, Any]:
+        normalized = designator.strip().upper()
+        return {
+            "designator": normalized,
+            "is_valid": None,
+            "entry": None,
+            "source": None,
+            "alerts": [
+                {
+                    "level": "warning",
+                    "code": "INTELLIGENCE_UNAVAILABLE",
+                    "message": "Aeronautical intelligence is unavailable",
+                }
+            ],
+            "messages": [],
+            "metadata": {},
+            "unavailable": True,
+        }
+
+    async def verify_aircraft_type(self, designator: str) -> dict[str, Any]:
+        normalized = designator.strip().upper()
+        if not self.base_url:
+            return self.unavailable_aircraft_type_response(designator=normalized)
+
+        path = f"/intelligence/aircraft-types/{normalized}"
+        if self.http_client is not None:
+            try:
+                response = await self.http_client.get(path)
+                response.raise_for_status()
+                return response.json()
+            except httpx.HTTPError:
+                return self.unavailable_aircraft_type_response(designator=normalized)
+
+        try:
+            async with httpx.AsyncClient(base_url=self.base_url, timeout=self.timeout_seconds) as client:
+                response = await client.get(path)
+                response.raise_for_status()
+                return response.json()
+        except httpx.HTTPError:
+            return self.unavailable_aircraft_type_response(designator=normalized)

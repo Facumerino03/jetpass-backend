@@ -7,6 +7,7 @@ from app.main import app
 from app.models import aircraft as _aircraft_model
 from app.models import auth_session as _auth_session_model
 from app.models import user as _user_model
+from app.services.aircraft_service import AircraftService
 
 
 @pytest.fixture
@@ -86,6 +87,7 @@ async def test_pilot_can_create_list_get_patch_and_soft_delete_aircraft(client):
     assert create_response.status_code == 201
     created = create_response.json()
     assert created["identification"] == "LV-ABC"
+    assert created["is_valid"] is None
     aircraft_id = created["id"]
 
     list_response = await client.get("/pilot/aircraft", headers=headers)
@@ -174,3 +176,48 @@ async def test_pilot_cannot_get_aircraft_owned_by_another_pilot(client):
     owner_aircraft = owner_get_response.json()
     assert owner_aircraft["alias"] == "Club Cessna"
     assert owner_aircraft["is_active"] is True
+
+
+class FakeTypeIntelligenceClient:
+    async def verify_aircraft_type(self, designator: str):
+        if designator.upper() == "ZZZZINVALID":
+            return {
+                "designator": designator.upper(),
+                "is_valid": False,
+                "entry": None,
+                "messages": [],
+            }
+        return {
+            "designator": designator.upper(),
+            "is_valid": True,
+            "entry": {"designator": designator.upper()},
+            "messages": [],
+        }
+
+
+@pytest.mark.asyncio
+async def test_verify_type_endpoint_updates_aircraft(client, monkeypatch):
+    monkeypatch.setattr(
+        AircraftService,
+        "_get_intelligence_client",
+        lambda self: FakeTypeIntelligenceClient(),
+    )
+    access_token = await register_pilot(client)
+    headers = {"Authorization": f"Bearer {access_token}"}
+
+    create_response = await client.post(
+        "/pilot/aircraft",
+        json=aircraft_payload(),
+        headers=headers,
+    )
+    assert create_response.status_code == 201
+    aircraft_id = create_response.json()["id"]
+
+    verify_response = await client.post(
+        f"/pilot/aircraft/{aircraft_id}/verify-type",
+        headers=headers,
+    )
+    assert verify_response.status_code == 200
+    body = verify_response.json()
+    assert body["is_valid"] is True
+    assert body["verified_at"] is not None

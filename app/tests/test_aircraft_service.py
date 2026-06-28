@@ -14,6 +14,37 @@ from app.schemas.aircraft import AircraftCreate, AircraftUpdate
 from app.services.aircraft_service import AircraftService
 
 
+class ValidTypeIntelligenceClient:
+    async def verify_aircraft_type(self, designator: str):
+        return {
+            "designator": designator.upper(),
+            "is_valid": True,
+            "entry": {"designator": designator.upper()},
+            "messages": ["Designator is registered in ICAO Doc 8643."],
+        }
+
+
+class InvalidTypeIntelligenceClient:
+    async def verify_aircraft_type(self, designator: str):
+        return {
+            "designator": designator.upper(),
+            "is_valid": False,
+            "entry": None,
+            "messages": [f"Designator {designator.upper()} was not found in ICAO Doc 8643."],
+        }
+
+
+class UnavailableTypeIntelligenceClient:
+    async def verify_aircraft_type(self, designator: str):
+        return {
+            "designator": designator.upper(),
+            "is_valid": None,
+            "entry": None,
+            "unavailable": True,
+            "messages": [],
+        }
+
+
 @pytest.fixture
 async def db_session():
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
@@ -96,19 +127,21 @@ def test_aircraft_create_rejects_blank_identification():
 @pytest.mark.asyncio
 async def test_aircraft_service_creates_updates_and_soft_deletes_for_pilot(db_session):
     pilot = await create_user(db_session)
+    service = AircraftService(intelligence_client=ValidTypeIntelligenceClient())
 
-    created = await AircraftService.create_for_pilot(db_session, pilot, aircraft_create_payload())
-    updated = await AircraftService.update_for_pilot(
+    created = await service.create_for_pilot(db_session, pilot, aircraft_create_payload())
+    updated = await service.update_for_pilot(
         db_session,
         pilot,
         created.id,
         AircraftUpdate(alias="Updated trainer", color_and_markings="White"),
     )
-    deleted = await AircraftService.delete_for_pilot(db_session, pilot, created.id)
-    fetched_after_delete = await AircraftService.get_for_pilot(db_session, pilot, created.id)
+    deleted = await service.delete_for_pilot(db_session, pilot, created.id)
+    fetched_after_delete = await service.get_for_pilot(db_session, pilot, created.id)
 
     assert created.owner_user_id == pilot.id
     assert created.identification == "LV-ABC"
+    assert created.is_valid is None
     assert updated.alias == "Updated trainer"
     assert updated.color_and_markings == "White"
     assert deleted is True
@@ -122,9 +155,76 @@ async def test_aircraft_service_rejects_non_pilot_users(db_session):
         email="admin@example.com",
         role=Role.ADMIN,
     )
+    service = AircraftService(intelligence_client=ValidTypeIntelligenceClient())
 
     with pytest.raises(HTTPException) as exc_info:
-        await AircraftService.create_for_pilot(db_session, user, aircraft_create_payload())
+        await service.create_for_pilot(db_session, user, aircraft_create_payload())
 
     assert exc_info.value.status_code == 403
     assert exc_info.value.detail == "Only pilots can manage aircraft"
+
+
+@pytest.mark.asyncio
+async def test_create_returns_pending_type_validation(db_session):
+    pilot = await create_user(db_session)
+    service = AircraftService(intelligence_client=ValidTypeIntelligenceClient())
+
+    created = await service.create_for_pilot(db_session, pilot, aircraft_create_payload())
+
+    assert created.is_valid is None
+    assert created.verified_at is None
+
+
+@pytest.mark.asyncio
+async def test_verify_type_marks_valid_designator(db_session):
+    pilot = await create_user(db_session)
+    service = AircraftService(intelligence_client=ValidTypeIntelligenceClient())
+    created = await service.create_for_pilot(db_session, pilot, aircraft_create_payload())
+
+    verified = await service.verify_type_for_pilot(db_session, pilot, created.id)
+
+    assert verified.is_valid is True
+    assert verified.verified_at is not None
+
+
+@pytest.mark.asyncio
+async def test_verify_type_marks_invalid_designator(db_session):
+    pilot = await create_user(db_session)
+    service = AircraftService(intelligence_client=InvalidTypeIntelligenceClient())
+    created = await service.create_for_pilot(db_session, pilot, aircraft_create_payload())
+
+    verified = await service.verify_type_for_pilot(db_session, pilot, created.id)
+
+    assert verified.is_valid is False
+    assert verified.verified_at is not None
+
+
+@pytest.mark.asyncio
+async def test_verify_type_keeps_pending_when_intelligence_unavailable(db_session):
+    pilot = await create_user(db_session)
+    service = AircraftService(intelligence_client=UnavailableTypeIntelligenceClient())
+    created = await service.create_for_pilot(db_session, pilot, aircraft_create_payload())
+
+    verified = await service.verify_type_for_pilot(db_session, pilot, created.id)
+
+    assert verified.is_valid is None
+    assert verified.verified_at is None
+
+
+@pytest.mark.asyncio
+async def test_update_type_designator_resets_validation(db_session):
+    pilot = await create_user(db_session)
+    service = AircraftService(intelligence_client=ValidTypeIntelligenceClient())
+    created = await service.create_for_pilot(db_session, pilot, aircraft_create_payload())
+    await service.verify_type_for_pilot(db_session, pilot, created.id)
+
+    updated = await service.update_for_pilot(
+        db_session,
+        pilot,
+        created.id,
+        AircraftUpdate(icao_type_designator="pa28"),
+    )
+
+    assert updated.icao_type_designator == "PA28"
+    assert updated.is_valid is None
+    assert updated.verified_at is None

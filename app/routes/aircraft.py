@@ -102,6 +102,17 @@ async def update_aircraft(
     return aircraft_service.to_public(aircraft)
 
 
+@router.post("/{aircraft_id}/verify-type")
+async def verify_aircraft_type(
+    aircraft_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: CurrentActiveUserDep,
+    aircraft_service: AircraftServiceDep,
+) -> AircraftPublic:
+    aircraft = await aircraft_service.verify_type_for_pilot(db, current_user, aircraft_id)
+    return aircraft_service.to_public(aircraft)
+
+
 @router.delete("/{aircraft_id}")
 async def delete_aircraft(
     aircraft_id: UUID,

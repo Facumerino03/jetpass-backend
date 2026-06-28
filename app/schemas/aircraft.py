@@ -85,6 +85,8 @@ class AircraftPublic(BaseModel):
     owner_user_id: UUID
     alias: str | None
     is_active: bool
+    is_valid: bool | None
+    verified_at: datetime | None
     identification: str
     icao_type_designator: str
     wake_turbulence_category: str

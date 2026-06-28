@@ -1,0 +1,42 @@
+@startuml flight_plan_incremental_persistence
+
+title JetPass — Persistencia incremental (PATCH por paso)
+
+actor Piloto as Pilot
+participant "App" as App
+participant "API" as API
+participant "Service" as Service
+database "PostgreSQL\n(source of truth)" as DB
+
+note over Pilot, DB
+  El backend es la única fuente de verdad:
+  cada paso hace PATCH sobre el borrador,
+  no se acumula nada en el dispositivo.
+end note
+
+== Inicia el plan ==
+Pilot -> App : Completa Casilla 7
+App -> API : POST /flight-plans { departure, destination, ... }
+API -> DB : INSERT (status='draft')
+API --> App : 201 { plan_id }
+
+== PATCH de un solo paso (Casilla 8) ==
+Pilot -> App : Elige flight_rules=V, flight_type=G
+App -> API : PATCH /flight-plans/{plan_id}\n{ "flight_rules": "V",\n  "flight_type": "G" }
+API -> Service : update_draft(payload)
+Service -> Service : model_dump(\n  exclude_unset=True)
+note right of Service
+  Solo persiste los campos
+  presentes en el body.
+end note
+Service -> DB : UPDATE flight_plans\nSET flight_rules='V',\n    flight_type='G'\nWHERE id=plan_id
+API --> App : 200 { plan actualizado }
+
+== Reapertura tras corte ==
+Pilot -> App : Reabre la app
+App -> API : GET /flight-plans/{plan_id}
+API -> DB : SELECT * WHERE id=plan_id
+API --> App : 200 { plan con lo ya guardado }
+note over App : Reconstruye el wizard\nen el mismo paso.
+
+@enduml
